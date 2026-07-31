@@ -18,7 +18,8 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
 
   const navItems = [
     { label: 'Dashboard', href: '/', icon: '📊' },
-    { label: 'Dispositivos', href: '/', icon: '📱' }, // 👈 Apunta a la raíz donde está tu lista activa
+    { label: 'Dispositivos', href: '/', icon: '📱' },
+    { label: 'Locales', href: '/dashboard/tenants', icon: '🏢' }, // 👈 Opción de Locales / Tenants añadida
     { label: 'Usuarios / Personal', href: '/users', icon: '👥' },
     { label: 'Configuración', href: '/settings', icon: '⚙️' },
   ];
@@ -46,7 +47,6 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
         {/* NAV MENU */}
         <nav className="space-y-1">
           {navItems.map((item, idx) => {
-            // Evitamos duplicar el highlighted style cuando ambos apuntan a /
             const isActive = pathname === item.href && (item.label === 'Dashboard' || pathname !== '/');
             return (
               <Link
