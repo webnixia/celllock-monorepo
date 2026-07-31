@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FirebaseService } from '../firebase/firebase.service';
 import { DeviceStatus } from '@prisma/client';
@@ -10,6 +14,9 @@ export class DevicesService {
     private readonly firebaseService: FirebaseService,
   ) {}
 
+  /**
+   * Resuelve el tenantId o crea uno de demostración si la base de datos está vacía
+   */
   private async resolveTenantId(tenantId?: string): Promise<string> {
     if (tenantId) {
       const tenantExists = await this.prisma.tenant.findUnique({
@@ -39,8 +46,12 @@ export class DevicesService {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
 
     if (data.imei) {
-      const existing = await this.prisma.device.findUnique({ where: { imei: data.imei } });
-      if (existing) throw new ConflictException('Ya existe un dispositivo registrado con este IMEI');
+      const existing = await this.prisma.device.findUnique({
+        where: { imei: data.imei },
+      });
+      if (existing) {
+        throw new ConflictException('Ya existe un dispositivo registrado con este IMEI');
+      }
     }
 
     const enrollmentCode = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -51,7 +62,7 @@ export class DevicesService {
         imei: data.imei || null,
         enrollmentCode,
         status: data.imei ? DeviceStatus.ACTIVE : DeviceStatus.PENDING_ENROLLMENT,
-        
+
         buyerName: data.buyerName || null,
         buyerDni: data.buyerDni || null,
         buyerPhone: data.buyerPhone || null,
@@ -68,16 +79,21 @@ export class DevicesService {
 
         tenantId: effectiveTenantId,
       },
+      include: {
+        tenant: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
     });
 
-    // Enviar a Firestore
+    // Sincronizar en tiempo real con Firebase
     const docId = device.imei || device.id;
     await this.firebaseService.updateDeviceStatus(docId, device.status);
 
     return device;
   }
 
-  // 2. Endpoint de auto-vinculación
+  // 2. Endpoint de auto-vinculación (Público / Desde la App Android)
   async enrollDevice(enrollmentCode: string, imei: string) {
     const device = await this.prisma.device.findFirst({
       where: { enrollmentCode },
@@ -101,23 +117,42 @@ export class DevicesService {
     return updatedDevice;
   }
 
-// Método para listar dispositivos por tenant
-  async getDevicesByTenant(tenantId: string) {
-    const effectiveTenantId = await this.resolveTenantId(tenantId);
+  // 3. Listar TODOS los dispositivos para el SUPERADMIN (con datos del local)
+  async getAllDevicesForSuperAdmin() {
     return this.prisma.device.findMany({
-      where: { tenantId: effectiveTenantId },
+      include: {
+        tenant: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // 4. Cambiar estado (Bloquear / Desbloquear)
+  // 4. Listar dispositivos por tenant para los locales
+  async getDevicesByTenant(tenantId: string) {
+    const effectiveTenantId = await this.resolveTenantId(tenantId);
+    return this.prisma.device.findMany({
+      where: { tenantId: effectiveTenantId },
+      include: {
+        tenant: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // 5. Cambiar estado (Bloquear / Desbloquear)
   async updateStatus(tenantId: string, deviceId: string, status: DeviceStatus) {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
     const device = await this.prisma.device.findFirst({
       where: { id: deviceId, tenantId: effectiveTenantId },
     });
 
-    if (!device) throw new NotFoundException('Dispositivo no encontrado');
+    if (!device) {
+      throw new NotFoundException('Dispositivo no encontrado');
+    }
 
     const updatedDevice = await this.prisma.device.update({
       where: { id: deviceId },
@@ -131,7 +166,7 @@ export class DevicesService {
     return updatedDevice;
   }
 
-  // 5. Borrar dispositivo
+  // 6. Borrar dispositivo
   async removeDevice(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (device) {

@@ -8,7 +8,9 @@ export class DevicesController {
 
   @Post()
   async create(@Req() req: any, @Body() body: any) {
-    const tenantId = req.user?.tenantId || body.tenantId || 'tenant-demo-id';
+    const tenantId = req.user?.role === 'SUPERADMIN' && body.tenantId 
+      ? body.tenantId 
+      : (req.user?.tenantId || body.tenantId || 'tenant-demo-id');
     return this.devicesService.createDevice(tenantId, body);
   }
 
@@ -18,18 +20,26 @@ export class DevicesController {
     return this.devicesService.enrollDevice(body.enrollmentCode, body.imei);
   }
 
-@Get()
+  @Get()
   async findAll(@Req() req: any, @Query('tenantId') queryTenantId?: string) {
+    // 👑 Si sos SUPERADMIN y no especificaste un local, devolvemos el 100% de los dispositivos de todos los locales
+    if (req.user?.role === 'SUPERADMIN' && !queryTenantId) {
+      return this.devicesService.getAllDevicesForSuperAdmin();
+    }
+
     const tenantId = req.user?.tenantId || queryTenantId || 'tenant-demo-id';
     return this.devicesService.getDevicesByTenant(tenantId);
   }
+
   @Patch(':id/status')
   async updateStatus(
     @Req() req: any,
     @Param('id') id: string,
     @Body() body: { tenantId?: string; status: DeviceStatus },
   ) {
-    const tenantId = req.user?.tenantId || body.tenantId || 'tenant-demo-id';
+    const tenantId = req.user?.role === 'SUPERADMIN' && body.tenantId 
+      ? body.tenantId 
+      : (req.user?.tenantId || body.tenantId || 'tenant-demo-id');
     return this.devicesService.updateStatus(tenantId, id, body.status);
   }
 
