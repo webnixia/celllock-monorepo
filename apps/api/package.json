@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "npx prisma generate && nest build",
+    "db:deploy": "prisma migrate deploy",
     "dev": "nest start --watch",
     "start": "node dist/apps/api/src/main",
     "start:debug": "nest start --debug --watch",
