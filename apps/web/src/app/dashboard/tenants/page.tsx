@@ -18,17 +18,17 @@ export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Form state
+  // Form state (crear local)
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [adminName, setAdminName] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
+  const [adminUsername, setAdminUsername] = useState(''); // 👈 Cambiado de correo a nombre de usuario
   const [adminPassword, setAdminPassword] = useState('');
 
-  // URL del backend apuntando correctamente al prefijo /api/v1
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://celllock-monorepo-production.up.railway.app';
 
   const fetchTenants = async () => {
@@ -61,6 +61,7 @@ export default function TenantsPage() {
 
     try {
       const token = localStorage.getItem('token');
+      // Enviamos adminEmail usando el valor de adminUsername por compatibilidad con el backend
       const res = await fetch(`${API_URL}/api/v1/tenants`, {
         method: 'POST',
         headers: {
@@ -71,7 +72,7 @@ export default function TenantsPage() {
           name,
           slug,
           adminName,
-          adminEmail,
+          adminEmail: `${adminUsername.toLowerCase().trim()}@controlcell.local`, // Creamos un correo interno automático basado en el usuario
           adminPassword,
         }),
       });
@@ -87,11 +88,40 @@ export default function TenantsPage() {
       setName('');
       setSlug('');
       setAdminName('');
-      setAdminEmail('');
+      setAdminUsername('');
       setAdminPassword('');
       fetchTenants();
     } catch (err: any) {
       setError(err.message || 'Ocurrió un error inesperado');
+    }
+  };
+
+  // Función para suspender o reactivar local
+  const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/v1/tenants/${tenantId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          isActive: !currentStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('No se pudo cambiar el estado del local');
+      }
+
+      setSuccessMsg(`Local ${!currentStatus ? 'activado' : 'suspendido'} correctamente.`);
+      fetchTenants();
+      if (selectedTenant) {
+        setSelectedTenant({ ...selectedTenant, isActive: !currentStatus });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar estado');
     }
   };
 
@@ -115,7 +145,7 @@ export default function TenantsPage() {
         </button>
       </div>
 
-      {/* ERROR / SUCCESS ALERTS */}
+      {/* ALERTAS */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm">
           {error}
@@ -127,28 +157,19 @@ export default function TenantsPage() {
         </div>
       )}
 
-      {/* CONTENT / TABLE */}
+      {/* TABLA */}
       <div className="bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
           <div className="p-12 text-center text-gray-400">Cargando locales...</div>
         ) : tenants.length === 0 ? (
-          /* ESTADO VACÍO ELEGANTE */
           <div className="p-16 text-center space-y-4">
             <div className="w-16 h-16 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
               🏢
             </div>
             <div className="max-w-sm mx-auto">
               <h3 className="text-base font-semibold text-white">No hay locales registrados</h3>
-              <p className="text-xs text-gray-400 mt-1">
-                Todavía no diste de alta ningún local o sucursal. Hacé clic en el botón de arriba para crear el primero.
-              </p>
+              <p className="text-xs text-gray-400 mt-1">Hacé clic en el botón de arriba para registrar tu primera sucursal.</p>
             </div>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="mt-2 bg-gray-800 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-xl text-xs transition-all border border-gray-700 cursor-pointer"
-            >
-              Crear mi primer local
-            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -176,12 +197,23 @@ export default function TenantsPage() {
                             : 'bg-red-500/10 text-red-400 border border-red-500/20'
                         }`}
                       >
-                        {tenant.isActive ? 'Activo' : 'Inactivo'}
+                        {tenant.isActive ? 'Activo' : 'Suspendido'}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
-                      <button className="text-indigo-400 hover:text-indigo-300 text-xs font-medium cursor-pointer">
+                    <td className="p-4 text-right space-x-3">
+                      <button
+                        onClick={() => setSelectedTenant(tenant)}
+                        className="text-indigo-400 hover:text-indigo-300 text-xs font-medium cursor-pointer"
+                      >
                         Ver Detalles
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(tenant.id, tenant.isActive)}
+                        className={`text-xs font-medium cursor-pointer ${
+                          tenant.isActive ? 'text-amber-400 hover:text-amber-300' : 'text-emerald-400 hover:text-emerald-300'
+                        }`}
+                      >
+                        {tenant.isActive ? 'Suspender' : 'Reactivar'}
                       </button>
                     </td>
                   </tr>
@@ -192,25 +224,18 @@ export default function TenantsPage() {
         )}
       </div>
 
-      {/* MODAL DE CREACIÓN */}
+      {/* MODAL: REGISTRAR NUEVO LOCAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6">
             <div className="flex justify-between items-center border-b border-gray-800 pb-4">
               <h2 className="text-lg font-bold text-white">Registrar Nuevo Local</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold cursor-pointer"
-              >
-                ✕
-              </button>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white text-lg font-bold cursor-pointer">✕</button>
             </div>
 
             <form onSubmit={handleCreateTenant} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-                  Nombre del Local
-                </label>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Nombre del Local</label>
                 <input
                   type="text"
                   required
@@ -222,9 +247,7 @@ export default function TenantsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-                  Slug (Identificador único sin espacios)
-                </label>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Slug (Identificador único)</label>
                 <input
                   type="text"
                   required
@@ -239,9 +262,7 @@ export default function TenantsPage() {
                 <p className="text-xs font-semibold text-indigo-400 mb-3">Datos del Administrador del Local</p>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-                      Nombre del Administrador
-                    </label>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Nombre y Apellido</label>
                     <input
                       type="text"
                       required
@@ -252,22 +273,18 @@ export default function TenantsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-                      Correo Electrónico
-                    </label>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Nombre de Usuario (Login)</label>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      placeholder="admin@local.com"
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
+                      placeholder="ej: juan_centro"
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
                       className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
-                      Contraseña Temporal
-                    </label>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Contraseña Temporal</label>
                     <input
                       type="password"
                       required
@@ -281,21 +298,69 @@ export default function TenantsPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 cursor-pointer transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 cursor-pointer transition-all"
-                >
-                  Guardar Local
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 cursor-pointer">Guardar Local</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: VER DETALLES */}
+      {selectedTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-4">
+              <h2 className="text-lg font-bold text-white">Detalles del Local</h2>
+              <button onClick={() => setSelectedTenant(null)} className="text-gray-400 hover:text-white text-lg font-bold cursor-pointer">✕</button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="bg-[#1f2937]/40 p-4 rounded-xl border border-gray-800 space-y-2">
+                <p className="text-xs text-gray-400 uppercase font-semibold">Nombre de la Tienda</p>
+                <p className="text-base font-bold text-white">{selectedTenant.name}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#1f2937]/40 p-3 rounded-xl border border-gray-800">
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold">Slug</p>
+                  <p className="text-xs font-mono text-indigo-400 mt-1">{selectedTenant.slug}</p>
+                </div>
+                <div className="bg-[#1f2937]/40 p-3 rounded-xl border border-gray-800">
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold">Estado</p>
+                  <p className={`text-xs font-bold mt-1 ${selectedTenant.isActive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {selectedTenant.isActive ? 'Activo' : 'Suspendido'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#1f2937]/40 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase font-semibold">Dispositivos Vinculados</p>
+                  <p className="text-lg font-bold text-white mt-0.5">{selectedTenant._count?.devices || 0} equipos</p>
+                </div>
+                <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400">
+                  📱
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-gray-800">
+              <button
+                onClick={() => handleToggleStatus(selectedTenant.id, selectedTenant.isActive)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer ${
+                  selectedTenant.isActive ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                }`}
+              >
+                {selectedTenant.isActive ? 'Suspender Local' : 'Reactivar Local'}
+              </button>
+              <button
+                onClick={() => setSelectedTenant(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-gray-800 text-white hover:bg-gray-700 cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
