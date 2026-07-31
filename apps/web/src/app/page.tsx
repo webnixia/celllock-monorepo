@@ -24,6 +24,7 @@ interface Device {
 }
 
 const DEMO_TENANT_ID = 'tenant-demo-id';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -96,7 +97,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const response = await fetch(`http://localhost:3005/api/v1/devices?tenantId=${DEMO_TENANT_ID}`, {
+      const response = await fetch(`${API_URL}/api/v1/devices?tenantId=${DEMO_TENANT_ID}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -130,7 +131,7 @@ export default function DashboardPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3005/api/v1/devices', {
+      const response = await fetch(`${API_URL}/api/v1/devices`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -181,7 +182,7 @@ export default function DashboardPage() {
     const newStatus = currentStatus === 'LOCKED' ? 'ACTIVE' : 'LOCKED';
     try {
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost:3005/api/v1/devices/${id}/status`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -199,7 +200,7 @@ export default function DashboardPage() {
     if (!confirm('¿Seguro de dar de baja este equipo?')) return;
     try {
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost:3005/api/v1/devices/${id}`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

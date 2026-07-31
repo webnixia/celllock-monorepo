@@ -1,5 +1,5 @@
-const API_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) 
-  || 'http://localhost:3005/api/v1';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+const API_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl}/api/v1`;
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
