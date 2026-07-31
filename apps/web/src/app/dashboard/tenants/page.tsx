@@ -8,30 +8,35 @@ interface Tenant {
   slug: string;
   isActive: boolean;
   createdAt: string;
-  users: { id: string; name: string; email: string; role: string }[];
-  _count?: { devices: number };
+  _count?: {
+    devices: number;
+    users: number;
+  };
 }
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  // Formulario para nuevo local
+  // Form state
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [error, setError] = useState('');
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+  // URL del backend (Usa variable de entorno o fallback a tu Railway)
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://celllock-monorepo-production.up.railway.app';
 
   const fetchTenants = async () => {
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_URL}/tenants`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       if (res.ok) {
@@ -39,7 +44,7 @@ export default function TenantsPage() {
         setTenants(data);
       }
     } catch (err) {
-      console.error('Error al cargar locales:', err);
+      console.error('Error cargando locales:', err);
     } finally {
       setLoading(false);
     }
@@ -52,123 +57,131 @@ export default function TenantsPage() {
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`${API_URL}/tenants`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, slug, adminName, adminEmail, adminPassword }),
+        body: JSON.stringify({
+          name,
+          slug,
+          adminName,
+          adminEmail,
+          adminPassword,
+        }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Error al crear el local');
+        throw new Error(data.message || 'Error al registrar el local');
       }
 
-      // Limpiar formulario y recargar lista
+      setSuccessMsg('¡Local creado exitosamente!');
+      setIsModalOpen(false);
       setName('');
       setSlug('');
       setAdminName('');
       setAdminEmail('');
       setAdminPassword('');
-      setShowModal(false);
       fetchTenants();
     } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const toggleTenantStatus = async (id: string, currentStatus: boolean) => {
-    try {
-      const res = await fetch(`${API_URL}/tenants/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ isActive: !currentStatus }),
-      });
-
-      if (res.ok) {
-        setTenants(tenants.map(t => t.id === id ? { ...t, isActive: !currentStatus } : t));
-      }
-    } catch (err) {
-      console.error('Error al cambiar estado:', err);
+      setError(err.message || 'Ocurrió un error inesperado');
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* Encabezado */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Gestión de Locales</h1>
-            <p className="text-gray-400 text-sm mt-1">Administrá las tiendas clientes y sus accesos.</p>
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition shadow-lg shadow-blue-600/20"
-          >
-            + Nuevo Local
-          </button>
+    <div className="p-8 space-y-8 bg-[#0b0f19] min-h-screen text-white">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#111827] p-6 rounded-2xl border border-gray-800 shadow-xl">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            🏢 Gestión de Locales y Tiendas
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Administrá los negocios clientes, sus accesos y el estado de sus suscripciones MDM.
+          </p>
         </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 text-sm cursor-pointer"
+        >
+          <span>+</span> Registrar Nuevo Local
+        </button>
+      </div>
 
-        {/* Tabla de Locales */}
+      {/* ERROR / SUCCESS ALERTS */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
+      {successMsg && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl text-sm">
+          {successMsg}
+        </div>
+      )}
+
+      {/* CONTENT / TABLE */}
+      <div className="bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
         {loading ? (
-          <div className="text-center py-20 text-gray-500">Cargando locales...</div>
+          <div className="p-12 text-center text-gray-400">Cargando locales...</div>
+        ) : tenants.length === 0 ? (
+          /* ESTADO VACÍO ELEGANTE */
+          <div className="p-16 text-center space-y-4">
+            <div className="w-16 h-16 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+              🏢
+            </div>
+            <div className="max-w-sm mx-auto">
+              <h3 className="text-base font-semibold text-white">No hay locales registrados</h3>
+              <p className="text-xs text-gray-400 mt-1">
+                Todavía no diste de alta ningún local o sucursal. Hacé clic en el botón de arriba para crear el primero.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="mt-2 bg-gray-800 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-xl text-xs transition-all border border-gray-700 cursor-pointer"
+            >
+              Crear mi primer local
+            </button>
+          </div>
         ) : (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-800 text-gray-400 text-xs uppercase tracking-wider bg-gray-900/80">
-                  <th className="py-4 px-6">Local / Tienda</th>
-                  <th className="py-4 px-6">Slug</th>
-                  <th className="py-4 px-6">Admin Encargado</th>
-                  <th className="py-4 px-6 text-center">Celulares</th>
-                  <th className="py-4 px-6 text-center">Estado</th>
-                  <th className="py-4 px-6 text-right">Acciones</th>
+                <tr className="border-b border-gray-800 text-[11px] uppercase tracking-wider text-gray-400 bg-[#1f2937]/30">
+                  <th className="p-4 font-semibold">Local / Tienda</th>
+                  <th className="p-4 font-semibold">Slug</th>
+                  <th className="p-4 font-semibold">Dispositivos</th>
+                  <th className="p-4 font-semibold">Estado</th>
+                  <th className="p-4 font-semibold text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60 text-sm">
                 {tenants.map((tenant) => (
-                  <tr key={tenant.id} className="hover:bg-gray-800/30 transition">
-                    <td className="py-4 px-6 font-semibold text-white">{tenant.name}</td>
-                    <td className="py-4 px-6 text-gray-400 font-mono text-xs">{tenant.slug}</td>
-                    <td className="py-4 px-6">
-                      {tenant.users?.[0] ? (
-                        <div>
-                          <p className="text-gray-200">{tenant.users[0].name}</p>
-                          <p className="text-xs text-gray-500">{tenant.users[0].email}</p>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500 italic">Sin admin</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 text-center font-semibold text-blue-400">
-                      {tenant._count?.devices || 0}
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        tenant.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {tenant.isActive ? 'Activo' : 'Suspendido'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => toggleTenantStatus(tenant.id, tenant.isActive)}
-                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
-                          tenant.isActive 
-                            ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30' 
-                            : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                  <tr key={tenant.id} className="hover:bg-gray-800/30 transition-colors">
+                    <td className="p-4 font-medium text-white">{tenant.name}</td>
+                    <td className="p-4 text-gray-400 font-mono text-xs">{tenant.slug}</td>
+                    <td className="p-4 text-gray-300">{tenant._count?.devices || 0} equipos</td>
+                    <td className="p-4">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          tenant.isActive
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
                         }`}
                       >
-                        {tenant.isActive ? 'Suspender' : 'Activar'}
+                        {tenant.isActive ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <button className="text-indigo-400 hover:text-indigo-300 text-xs font-medium cursor-pointer">
+                        Ver Detalles
                       </button>
                     </td>
                   </tr>
@@ -177,107 +190,115 @@ export default function TenantsPage() {
             </table>
           </div>
         )}
+      </div>
 
-        {/* Modal para Crear Local */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-              <h2 className="text-xl font-bold mb-4">Registrar Nuevo Local</h2>
-              
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-lg mb-4">
-                  {error}
-                </div>
-              )}
+      {/* MODAL DE CREACIÓN */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-4">
+              <h2 className="text-lg font-bold text-white">Registrar Nuevo Local</h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-white text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-              <form onSubmit={handleCreateTenant} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Nombre del Local</label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="ej: Local Centro Celulares"
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+            <form onSubmit={handleCreateTenant} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                  Nombre del Local
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: ControlCell Centro"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Slug (Identificador único)</label>
-                  <input
-                    type="text"
-                    required
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    placeholder="ej: centro-celulares"
-                    className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                  Slug (Identificador único sin espacios)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ej: controlcell-centro"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
 
-                <div className="border-t border-gray-800 pt-4 mt-2">
-                  <p className="text-xs font-semibold text-blue-400 mb-3">Datos del Administrador del Local</p>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Nombre del Dueño/Admin</label>
-                      <input
-                        type="text"
-                        required
-                        value={adminName}
-                        onChange={(e) => setAdminName(e.target.value)}
-                        placeholder="Juan Pérez"
-                        className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Correo Electrónico</label>
-                      <input
-                        type="email"
-                        required
-                        value={adminEmail}
-                        onChange={(e) => setAdminEmail(e.target.value)}
-                        placeholder="juan@centrocel.com"
-                        className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Contraseña Temporal</label>
-                      <input
-                        type="password"
-                        required
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
+              <div className="pt-2 border-t border-gray-800">
+                <p className="text-xs font-semibold text-indigo-400 mb-3">Datos del Administrador del Local</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                      Nombre del Administrador
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Juan Pérez"
+                      value={adminName}
+                      onChange={(e) => setAdminName(e.target.value)}
+                      className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                      Correo Electrónico
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="admin@local.com"
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                      Contraseña Temporal
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full bg-[#1f2937] border border-gray-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    />
                   </div>
                 </div>
+              </div>
 
-                <div className="flex justify-end gap-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-blue-600/20"
-                  >
-                    Guardar Local
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 cursor-pointer transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 cursor-pointer transition-all"
+                >
+                  Guardar Local
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
     </div>
   );
 }
