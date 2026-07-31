@@ -28,13 +28,13 @@ export default function TenantsPage() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
-  // URL del backend (Usa variable de entorno o fallback a tu Railway)
+  // URL del backend apuntando correctamente al prefijo /api/v1
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://celllock-monorepo-production.up.railway.app';
 
   const fetchTenants = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/tenants`, {
+      const res = await fetch(`${API_URL}/api/v1/tenants`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -61,7 +61,7 @@ export default function TenantsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/tenants`, {
+      const res = await fetch(`${API_URL}/api/v1/tenants`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
