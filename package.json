@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "turbo build",
+    "build": "pnpm --filter @celllock/api run build",
+    "start": "pnpm --filter @celllock/api run start:prod",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
