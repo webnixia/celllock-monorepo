@@ -4,10 +4,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
-  SUPERADMIN   // Vos (Dueño global del sistema - Control Total)
+  SUPERADMIN   // Dueño global del sistema - Control Total
   TENANT_ADMIN // Dueño del local (Administra sus vendedores y celulares)
   OPERATOR     // Vendedor del local (Carga ventas, cobra cuotas, bloquea/desbloquea)
 }
@@ -20,15 +21,21 @@ enum DeviceStatus {
 }
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String   // Nombre de la tienda (ej: "Cellular Vera")
-  slug      String   @unique
-  isActive  Boolean  @default(true) // 🔴/🟢 Permite a tu SuperAdmin activar/suspender el servicio
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(uuid())
+  name        String    // Nombre de la tienda (ej: "Cellular Vera")
+  slug        String    @unique
+  isActive    Boolean   @default(true) // 🔴/🟢 Permite activar/suspender el servicio
+  
+  // 📦 Campos del Plan SaaS (Obligatorios para que el backend compile)
+  monthlyFee  Float     @default(50000)
+  deviceLimit Int       @default(10)
+  dueDate     DateTime?
 
-  users   User[]
-  devices Device[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users       User[]
+  devices     Device[]
 
   @@map("tenants")
 }
@@ -61,15 +68,15 @@ model Device {
   buyerPhone      String?
 
   // 💵 Plan de Cuotas y Vencimientos
-  price           Float?       // Precio total de la venta
-  downPayment     Float?       // Entrega inicial
-  installmentAmount Float?     // Valor de cada cuota
-  totalInstallments Int?       // Cantidad de cuotas
-  paidInstallments   Int?       @default(0) // Cuotas pagadas
-  paymentFrequency   String?    // 'SEMANAL', 'QUINCENAL', 'MENSUAL'
-  dueDate         DateTime?    // Fecha próximo vencimiento
-  gracePeriodDays Int?         @default(3) // Días de tolerancia antes de bloquear
-  autoLockEnabled Boolean      @default(true) // Si bloquea solo al vencer
+  price             Float?       // Precio total de la venta
+  downPayment       Float?       // Entrega inicial
+  installmentAmount Float?       // Valor de cada cuota
+  totalInstallments Int?         // Cantidad de cuotas
+  paidInstallments   Int?         @default(0) // Cuotas pagadas
+  paymentFrequency   String?      // 'SEMANAL', 'QUINCENAL', 'MENSUAL'
+  dueDate           DateTime?    // Fecha próximo vencimiento
+  gracePeriodDays Int?           @default(3) // Días de tolerancia antes de bloquear
+  autoLockEnabled Boolean        @default(true) // Si bloquea solo al vencer
 
   tenantId        String
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
