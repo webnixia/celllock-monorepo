@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuard
 import { DevicesService } from './devices.service';
 import { DeviceStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
@@ -9,7 +10,6 @@ export class DevicesController {
   @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Req() req: any, @Body() body: any) {
-    // req.user ahora sí contiene el rol y el tenantId real del usuario logueado
     const tenantId = req.user?.role === 'SUPERADMIN' && body.tenantId 
       ? body.tenantId 
       : req.user?.tenantId;
@@ -17,7 +17,7 @@ export class DevicesController {
     return this.devicesService.createDevice(tenantId, body);
   }
 
-  // 🔓 Ruta pública para que la App Móvil envíe su IMEI (NO lleva UseGuards)
+  // 🔓 Ruta pública para que la App Móvil envíe su IMEI
   @Post('enroll')
   async enroll(@Body() body: { enrollmentCode: string; imei: string }) {
     return this.devicesService.enrollDevice(body.enrollmentCode, body.imei);
@@ -25,13 +25,18 @@ export class DevicesController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  async findAll(@Req() req: any, @Query('tenantId') queryTenantId?: string) {
-    // Si es SuperAdmin y quiere ver todo o filtrar por un local específico
-    if (req.user?.role === 'SUPERADMIN' && !queryTenantId) {
+  async findAll(
+    @Req() req: any, 
+    @Query('tenantId') queryTenantId?: string,
+    @Query('global') global?: string,
+  ) {
+    // 🔒 Solo muestra TODO si el superadmin lo pide explícitamente con ?global=true
+    if (req.user?.role === 'SUPERADMIN' && global === 'true') {
       return this.devicesService.getAllDevicesForSuperAdmin();
     }
 
-    const tenantId = req.user?.role === 'SUPERADMIN' && queryTenantId ? queryTenantId : req.user?.tenantId;
+    // Por defecto, usa el local consultado o el del usuario logueado (incluso para el admin)
+    const tenantId = queryTenantId || req.user?.tenantId;
     return this.devicesService.getDevicesByTenant(tenantId);
   }
 
