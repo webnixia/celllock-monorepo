@@ -25,7 +25,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || user.tenant?.id,
     };
 
     return {
@@ -36,9 +36,9 @@ export class AuthService {
         email: user.email,
         role: user.role,
         tenant: {
-          id: user.tenant.id,
-          name: user.tenant.name,
-          slug: user.tenant.slug,
+          id: user.tenant?.id,
+          name: user.tenant?.name,
+          slug: user.tenant?.slug,
         },
       },
     };
