@@ -73,7 +73,7 @@ export class DevicesService {
 
       const enrollmentCode = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      // 🛠️ Limpiador seguro de números para evitar NaN por puntos de miles o comas
+      // 🛠️ Limpiador seguro de números
       const parseNum = (val: any) => {
         if (val === undefined || val === null || val === '') return null;
         if (typeof val === 'number') return val;
@@ -129,8 +129,13 @@ export class DevicesService {
         },
       });
 
-      const docId = device.imei || device.id;
-      await this.firebaseService.updateDeviceStatus(docId, device.status);
+      // 🛡️ Sincronización segura con Firebase (si falla, no rompe la venta)
+      try {
+        const docId = device.imei || device.id;
+        await this.firebaseService.updateDeviceStatus(docId, device.status);
+      } catch (fbError) {
+        console.error('Advertencia: No se pudo sincronizar con Firebase:', fbError);
+      }
 
       return device;
     } catch (error: any) {
@@ -158,7 +163,11 @@ export class DevicesService {
       },
     });
 
-    await this.firebaseService.updateDeviceStatus(imei, 'ACTIVE');
+    try {
+      await this.firebaseService.updateDeviceStatus(imei, 'ACTIVE');
+    } catch (e) {
+      console.error('Firebase sync error on enroll:', e);
+    }
 
     return updatedDevice;
   }
@@ -201,8 +210,12 @@ export class DevicesService {
       data: { status, lastSeenAt: new Date() },
     });
 
-    const docId = updatedDevice.imei || updatedDevice.id;
-    await this.firebaseService.updateDeviceStatus(docId, status);
+    try {
+      const docId = updatedDevice.imei || updatedDevice.id;
+      await this.firebaseService.updateDeviceStatus(docId, status);
+    } catch (e) {
+      console.error('Firebase sync error on status update:', e);
+    }
 
     return updatedDevice;
   }
@@ -211,8 +224,12 @@ export class DevicesService {
   async removeDevice(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (device) {
-      const docId = device.imei || device.id;
-      await this.firebaseService.updateDeviceStatus(docId, 'UNENROLLED');
+      try {
+        const docId = device.imei || device.id;
+        await this.firebaseService.updateDeviceStatus(docId, 'UNENROLLED');
+      } catch (e) {
+        console.error('Firebase sync error on remove:', e);
+      }
     }
     return this.prisma.device.delete({ where: { id } });
   }
