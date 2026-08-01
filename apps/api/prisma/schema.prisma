@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -26,7 +25,7 @@ model Tenant {
   slug        String    @unique
   isActive    Boolean   @default(true) // 🔴/🟢 Permite activar/suspender el servicio
   
-  // 📦 Campos del Plan SaaS (Obligatorios para que el backend compile)
+  // 📦 Campos del Plan SaaS
   monthlyFee  Float     @default(50000)
   deviceLimit Int       @default(10)
   dueDate     DateTime?
