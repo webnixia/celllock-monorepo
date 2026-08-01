@@ -16,33 +16,25 @@ export class DevicesService {
   ) {}
 
   /**
-   * Resuelve el tenantId o crea uno de demostración si la base de datos está vacía
+   * Resuelve el tenantId de forma estricta y segura para cada local
    */
   private async resolveTenantId(tenantId?: string): Promise<string> {
-    if (tenantId) {
-      const tenantExists = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-      });
-      if (tenantExists) return tenantExists.id;
+    if (!tenantId) {
+      throw new BadRequestException('El identificador del local (tenantId) es obligatorio.');
     }
 
-    const firstTenant = await this.prisma.tenant.findFirst();
-    if (firstTenant) {
-      return firstTenant.id;
-    }
-
-    const defaultTenant = await this.prisma.tenant.create({
-      data: {
-        id: tenantId || 'tenant-demo-id',
-        name: 'ControlCell Demo Org',
-        slug: 'controlcell-demo',
-      },
+    const tenantExists = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
     });
 
-    return defaultTenant.id;
+    if (!tenantExists) {
+      throw new NotFoundException('El local especificado no existe.');
+    }
+
+    return tenantExists.id;
   }
 
-  // 1. Crear Venta / Registro de Dispositivo
+  // 1. Crear Venta / Registro de Dispositivo asociado estrictamente a su Tenant
   async createDevice(tenantId: string, data: any) {
     try {
       const effectiveTenantId = await this.resolveTenantId(tenantId);
@@ -85,7 +77,7 @@ export class DevicesService {
         return isNaN(parsed) ? null : parsed;
       };
 
-      // 🛠️ Limpiador y formateador de fecha (DD/MM/YYYY o YYYY-MM-DD)
+      // 🛠️ Limpiador y formateador de fecha
       let parsedDueDate = null;
       if (data.dueDate) {
         if (typeof data.dueDate === 'string' && data.dueDate.includes('/')) {
@@ -120,7 +112,7 @@ export class DevicesService {
           gracePeriodDays: parseNum(data.gracePeriodDays) || 3,
           autoLockEnabled: data.autoLockEnabled !== undefined ? Boolean(data.autoLockEnabled) : true,
 
-          tenantId: effectiveTenantId,
+          tenantId: effectiveTenantId, // 🔒 Estrictamente ligado al local correcto
         },
         include: {
           tenant: {
@@ -129,7 +121,6 @@ export class DevicesService {
         },
       });
 
-      // 🛡️ Sincronización segura con Firebase (si falla, no rompe la venta)
       try {
         const docId = device.imei || device.id;
         await this.firebaseService.updateDeviceStatus(docId, device.status);
@@ -182,7 +173,7 @@ export class DevicesService {
     });
   }
 
-  // 4. Listar dispositivos por tenant
+  // 4. Listar dispositivos exclusivamente por tenant
   async getDevicesByTenant(tenantId: string) {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
     return this.prisma.device.findMany({
@@ -202,7 +193,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new NotFoundException('Dispositivo no encontrado');
+      throw new NotFoundException('Dispositivo no encontrado en este local');
     }
 
     const updatedDevice = await this.prisma.device.update({
@@ -231,6 +222,6 @@ export class DevicesService {
         console.error('Firebase sync error on remove:', e);
       }
     }
-    return this.prisma.device.delete({ where: { id } });
+    return this.prisma.device.delete({ where: { id: device?.id } });
   }
 }
