@@ -2,7 +2,12 @@ const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 const API_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl}/api/v1`;
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+  // 🛡️ Limpiar comillas accidentales si se guardó con JSON.stringify
+  if (token) {
+    token = token.replace(/^"(.*)"$/, '$1');
+  }
 
   const headers = {
     'Content-Type': 'application/json',
@@ -17,6 +22,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error('Error en fetchApi:', { status: response.status, errorData, tokenEnviado: token ? 'Presente' : 'Ausente' });
     throw new Error(errorData.message || 'Error en la petición');
   }
 
