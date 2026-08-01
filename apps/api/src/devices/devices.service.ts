@@ -41,9 +41,25 @@ export class DevicesService {
     return defaultTenant.id;
   }
 
-  // 1. Crear Venta / Registro de Dispositivo
+  // 1. Crear Venta / Registro de Dispositivo (Validando límite del plan SaaS)
   async createDevice(tenantId: string, data: any) {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
+
+    // 📦 Verificar el local y su plan / límite de dispositivos contratados (con as any para evitar errores de TS)
+    const tenant = (await this.prisma.tenant.findUnique({
+      where: { id: effectiveTenantId },
+      include: { _count: { select: { devices: true } } },
+    })) as any;
+
+    if (!tenant || !tenant.isActive) {
+      throw new ConflictException('El local está suspendido o no existe.');
+    }
+
+    if (tenant._count.devices >= tenant.deviceLimit) {
+      throw new ConflictException(
+        `Has alcanzado el límite de tu plan (${tenant.deviceLimit} equipos). Contacta al administrador para ampliar la capacidad.`
+      );
+    }
 
     if (data.imei) {
       const existing = await this.prisma.device.findUnique({
