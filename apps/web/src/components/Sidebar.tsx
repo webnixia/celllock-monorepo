@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -10,18 +11,28 @@ interface SidebarProps {
 export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [userRole, setUserRole] = useState<string>('');
+
+  useEffect(() => {
+    // Leemos el rol o tipo de usuario guardado al loguearse
+    const role = localStorage.getItem('role') || '';
+    setUserRole(role);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('role');
     router.push('/login');
   };
 
+  // Definimos las opciones del menú de forma dinámica
   const navItems = [
-    { label: 'Dashboard', href: '/', icon: '📊' },
-    { label: 'Dispositivos', href: '/', icon: '📱' },
-    { label: 'Locales', href: '/dashboard/tenants', icon: '🏢' }, // 👈 Opción de Locales / Tenants añadida
-    { label: 'Usuarios / Personal', href: '/users', icon: '👥' },
-    { label: 'Configuración', href: '/settings', icon: '⚙️' },
+    { label: 'Dashboard', href: '/', icon: '📊', show: true },
+    { label: 'Dispositivos', href: '/dashboard/devices', icon: '📱', show: true },
+    // 🏢 La opción de "Locales" solo se muestra si el rol es SUPERADMIN
+    { label: 'Locales', href: '/dashboard/tenants', icon: '🏢', show: userRole === 'SUPERADMIN' },
+    { label: 'Usuarios / Personal', href: '/users', icon: '👥', show: true },
+    { label: 'Configuración', href: '/settings', icon: '⚙️', show: true },
   ];
 
   return (
@@ -34,7 +45,9 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
           </div>
           <div>
             <h1 className="font-bold text-white tracking-tight text-base leading-tight">ControlCell</h1>
-            <p className="text-[11px] text-indigo-400 font-medium">MDM Admin</p>
+            <p className="text-[11px] text-indigo-400 font-medium">
+              {userRole === 'SUPERADMIN' ? 'Super Admin' : 'MDM Admin'}
+            </p>
           </div>
         </div>
 
@@ -46,23 +59,25 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
 
         {/* NAV MENU */}
         <nav className="space-y-1">
-          {navItems.map((item, idx) => {
-            const isActive = pathname === item.href && (item.label === 'Dashboard' || pathname !== '/');
-            return (
-              <Link
-                key={`${item.href}-${idx}`}
-                href={item.href}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                  isActive
-                    ? 'bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-600/30'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
-                }`}
-              >
-                <span className="text-base">{item.icon}</span>
-                {item.label}
-              </Link>
-            );
-          })}
+          {navItems
+            .filter((item) => item.show) // Filtramos solo los elementos permitidos para este rol
+            .map((item, idx) => {
+              const isActive = pathname === item.href && (item.label === 'Dashboard' || pathname !== '/');
+              return (
+                <Link
+                  key={`${item.href}-${idx}`}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-600/30'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800/60'
+                  }`}
+                >
+                  <span className="text-base">{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            })}
         </nav>
       </div>
 
