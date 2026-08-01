@@ -72,6 +72,20 @@ export class DevicesService {
 
     const enrollmentCode = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
 
+    // 🛠️ Solución segura para convertir formatos de fecha (DD/MM/YYYY o YYYY-MM-DD)
+    let parsedDueDate = null;
+    if (data.dueDate) {
+      if (typeof data.dueDate === 'string' && data.dueDate.includes('/')) {
+        const [day, month, year] = data.dueDate.split('/');
+        parsedDueDate = new Date(`${year}-${month}-${day}`);
+      } else {
+        parsedDueDate = new Date(data.dueDate);
+      }
+      if (isNaN(parsedDueDate.getTime())) {
+        parsedDueDate = null;
+      }
+    }
+
     const device = await this.prisma.device.create({
       data: {
         model: data.model,
@@ -89,7 +103,7 @@ export class DevicesService {
         totalInstallments: data.totalInstallments ? Number(data.totalInstallments) : null,
         paidInstallments: data.paidInstallments ? Number(data.paidInstallments) : 0,
         paymentFrequency: data.paymentFrequency || 'MENSUAL',
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        dueDate: parsedDueDate,
         gracePeriodDays: data.gracePeriodDays ? Number(data.gracePeriodDays) : 3,
         autoLockEnabled: data.autoLockEnabled !== undefined ? Boolean(data.autoLockEnabled) : true,
 
