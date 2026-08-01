@@ -8,7 +8,6 @@ interface Tenant {
   slug: string;
   isActive: boolean;
   createdAt: string;
-  // Nuevos campos profesionales para el SaaS
   monthlyFee?: number;
   deviceLimit?: number;
   dueDate?: string;
@@ -26,19 +25,17 @@ export default function TenantsPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Form state (Creación Profesional)
+  // Form state
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  
-  // Nuevos campos de Negocio / Suscripción
   const [monthlyFee, setMonthlyFee] = useState<number>(50000);
   const [deviceLimit, setDeviceLimit] = useState<number>(10);
   const [dueDate, setDueDate] = useState<string>(
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  ); // Por defecto 30 días a partir de hoy
+  );
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://celllock-monorepo-production.up.railway.app';
 
@@ -96,9 +93,8 @@ export default function TenantsPage() {
         throw new Error(data.message || 'Error al registrar el local');
       }
 
-      setSuccessMsg('¡Local y plan de suscripción creados exitosamente!');
+      setSuccessMsg('¡Local y plan creados exitosamente!');
       setIsModalOpen(false);
-      // Limpiar formulario
       setName('');
       setSlug('');
       setAdminName('');
@@ -112,7 +108,7 @@ export default function TenantsPage() {
     }
   };
 
-  // Función corregida para suspender o reactivar local
+  // Suspender o reactivar local
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
     setError('');
     setSuccessMsg('');
@@ -141,7 +137,37 @@ export default function TenantsPage() {
         setSelectedTenant({ ...selectedTenant, isActive: !currentStatus });
       }
     } catch (err: any) {
-      setError(err.message || 'Error al conectar con el servidor para cambiar estado');
+      setError(err.message || 'Error al conectar con el servidor');
+    }
+  };
+
+  // Eliminar Local
+  const handleDeleteTenant = async (tenantId: string, tenantName: string) => {
+    if (!confirm(`¿Estás seguro de que querés eliminar el local "${tenantName}"? Se borrarán sus dispositivos y usuarios asociados permanentemente.`)) {
+      return;
+    }
+
+    setError('');
+    setSuccessMsg('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/v1/tenants/${tenantId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'No se pudo eliminar el local');
+      }
+
+      setSuccessMsg('Local eliminado correctamente.');
+      setSelectedTenant(null);
+      fetchTenants();
+    } catch (err: any) {
+      setError(err.message || 'Error al intentar eliminar el local');
     }
   };
 
@@ -169,13 +195,13 @@ export default function TenantsPage() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
           <span>⚠️ {error}</span>
-          <button onClick={() => setError('')} className="text-xs hover:underline">✕</button>
+          <button onClick={() => setError('')} className="text-xs hover:underline cursor-pointer">✕</button>
         </div>
       )}
       {successMsg && (
         <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
           <span>✨ {successMsg}</span>
-          <button onClick={() => setSuccessMsg('')} className="text-xs hover:underline">✕</button>
+          <button onClick={() => setSuccessMsg('')} className="text-xs hover:underline cursor-pointer">✕</button>
         </div>
       )}
 
@@ -236,7 +262,7 @@ export default function TenantsPage() {
                         {tenant.isActive ? '🟢 Activo' : '🔴 Suspendido'}
                       </span>
                     </td>
-                    <td className="p-4 text-right space-x-3">
+                    <td className="p-4 text-right space-x-2">
                       <button
                         onClick={() => setSelectedTenant(tenant)}
                         className="text-indigo-400 hover:text-indigo-300 text-xs font-medium cursor-pointer"
@@ -245,13 +271,19 @@ export default function TenantsPage() {
                       </button>
                       <button
                         onClick={() => handleToggleStatus(tenant.id, tenant.isActive)}
-                        className={`text-xs font-semibold px-3 py-1 rounded-lg border transition-all cursor-pointer ${
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                           tenant.isActive
                             ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
                             : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
                         }`}
                       >
                         {tenant.isActive ? 'Suspender' : 'Reactivar'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTenant(tenant.id, tenant.name)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
+                      >
+                        Eliminar
                       </button>
                     </td>
                   </tr>
@@ -262,7 +294,7 @@ export default function TenantsPage() {
         )}
       </div>
 
-      {/* MODAL: REGISTRAR NUEVO LOCAL CON PLAN Y LÍMITES */}
+      {/* MODAL: REGISTRAR NUEVO LOCAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 overflow-y-auto">
           <div className="bg-[#111827] border border-gray-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-6 my-8">
@@ -444,10 +476,10 @@ export default function TenantsPage() {
                 {selectedTenant.isActive ? 'Suspender Acceso' : 'Reactivar Cuenta'}
               </button>
               <button
-                onClick={() => setSelectedTenant(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-gray-800 text-white hover:bg-gray-700 cursor-pointer"
+                onClick={() => handleDeleteTenant(selectedTenant.id, selectedTenant.name)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 cursor-pointer"
               >
-                Cerrar
+                Eliminar Local
               </button>
             </div>
           </div>

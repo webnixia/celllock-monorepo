@@ -7,13 +7,16 @@ import * as bcrypt from 'bcrypt';
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 1. Crear un nuevo Local (Tenant) junto con su Usuario Administrador
+  // 1. Crear un nuevo Local (Tenant) junto con su Usuario Administrador y Plan SaaS
   async createTenant(data: {
     name: string;
     slug: string;
     adminName: string;
     adminEmail: string;
     adminPassword: string;
+    monthlyFee?: number;
+    deviceLimit?: number;
+    dueDate?: string;
   }) {
     // Verificar si el slug ya existe
     const existingTenant = await this.prisma.tenant.findUnique({
@@ -39,12 +42,15 @@ export class TenantsService {
       data: {
         name: data.name,
         slug: data.slug,
+        monthlyFee: data.monthlyFee ? Number(data.monthlyFee) : 50000,
+        deviceLimit: data.deviceLimit ? Number(data.deviceLimit) : 10,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
         users: {
           create: {
             name: data.adminName,
             email: data.adminEmail,
             password: hashedPassword,
-            role: Role.TENANT_ADMIN, // Rol de dueño de local
+            role: Role.TENANT_ADMIN,
           },
         },
       },
@@ -66,14 +72,14 @@ export class TenantsService {
           select: { id: true, name: true, email: true, role: true },
         },
         _count: {
-          select: { devices: true }, // Cuántos celulares tiene cargados cada local
+          select: { devices: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // 3. Activar o Suspender un local (Por falta de pago del abono)
+  // 3. Activar o Suspender un local
   async toggleStatus(id: string, isActive: boolean) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) {
@@ -83,6 +89,20 @@ export class TenantsService {
     return this.prisma.tenant.update({
       where: { id },
       data: { isActive },
+    });
+  }
+
+  // 4. Eliminar un local junto con sus dispositivos y usuarios asociados de forma segura
+  async removeTenant(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) {
+      throw new NotFoundException('Local no encontrado');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.device.deleteMany({ where: { tenantId: id } });
+      await tx.user.deleteMany({ where: { tenantId: id } });
+      return tx.tenant.delete({ where: { id } });
     });
   }
 }

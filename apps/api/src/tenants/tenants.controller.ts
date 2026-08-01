@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Req } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 
 @Controller('tenants')
@@ -22,6 +22,9 @@ export class TenantsController {
       adminName: string;
       adminEmail: string;
       adminPassword: string;
+      monthlyFee?: number;
+      deviceLimit?: number;
+      dueDate?: string;
     },
   ) {
     return this.tenantsService.createTenant(body);
@@ -34,5 +37,11 @@ export class TenantsController {
     @Body('isActive') isActive: boolean,
   ) {
     return this.tenantsService.toggleStatus(id, isActive);
+  }
+
+  // Eliminar un local y sus dependencias
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.tenantsService.removeTenant(id);
   }
 }
