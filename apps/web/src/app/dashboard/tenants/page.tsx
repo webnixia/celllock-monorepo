@@ -108,13 +108,13 @@ export default function TenantsPage() {
     }
   };
 
-  // Suspender o reactivar local
+  // Suspender o reactivar local (Ruta corregida con /status)
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
     setError('');
     setSuccessMsg('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/v1/tenants/${tenantId}`, {
+      const res = await fetch(`${API_URL}/api/v1/tenants/${tenantId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
