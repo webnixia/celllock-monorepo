@@ -51,16 +51,21 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[#0b0f19] text-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#111827] border border-gray-800 rounded-2xl p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">📱</span>
+        {/* LOGO CORPORATIVO PROFESIONAL CC */}
+        <div className="flex items-center gap-3.5 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30 border border-indigo-400/30 shrink-0">
+            CC
+          </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">ControlCell</h1>
-            <p className="text-xs text-gray-400">Acceso a Plataforma MDM</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-1.5">
+              ControlCell <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+            </h1>
+            <p className="text-xs text-indigo-400 font-semibold tracking-wider uppercase">Acceso a Plataforma MDM</p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg">
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl">
             {error}
           </div>
         )}
@@ -76,7 +81,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="rodrigo@admin.com"
-              className="w-full px-4 py-2.5 bg-[#1f2937] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500 text-sm"
+              className="w-full px-4 py-2.5 bg-[#1f2937] border border-gray-700 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-sm transition-all"
             />
           </div>
 
@@ -90,14 +95,14 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-2.5 bg-[#1f2937] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500 text-sm"
+              className="w-full px-4 py-2.5 bg-[#1f2937] border border-gray-700 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-sm transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-sm transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
           >
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </button>
