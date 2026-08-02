@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { DeviceStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -17,7 +17,6 @@ export class DevicesController {
     return this.devicesService.createDevice(tenantId, body);
   }
 
-  // 🔓 Ruta pública para que la App Móvil envíe su IMEI
   @Post('enroll')
   async enroll(@Body() body: { enrollmentCode: string; imei: string }) {
     return this.devicesService.enrollDevice(body.enrollmentCode, body.imei);
@@ -30,13 +29,19 @@ export class DevicesController {
     @Query('tenantId') queryTenantId?: string,
     @Query('global') global?: string,
   ) {
-    // Si el superadmin pide ver todo globalmente de forma explícita
-    if (req.user?.role === 'SUPERADMIN' && global === 'true') {
+    // 👑 SI ES SUPERADMIN: Puede ver todo globalmente o filtrar por un local específico
+    if (req.user?.role === 'SUPERADMIN') {
+      if (queryTenantId) {
+        return this.devicesService.getDevicesByTenant(queryTenantId);
+      }
       return this.devicesService.getAllDevicesForSuperAdmin();
     }
 
-    // Por defecto, tanto el superadmin como los locales ven únicamente los dispositivos de su propio tenantId
-    const tenantId = queryTenantId || req.user?.tenantId;
+    // 🏢 SI ES UN LOCAL COMUN (TENANT_ADMIN): Ve estrictamente SU PROPIO local, sin excepciones
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('Su cuenta no tiene un local asignado.');
+    }
     return this.devicesService.getDevicesByTenant(tenantId);
   }
 

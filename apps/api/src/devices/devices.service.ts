@@ -16,26 +16,23 @@ export class DevicesService {
   ) {}
 
   /**
-   * Resuelve el tenantId de forma segura. Si no viene o no existe,
-   * utiliza automáticamente un local de respaldo (fallback) para evitar que falle la venta.
+   * Resuelve el tenantId de forma ESTRICTA. 
+   * Sin comodines ni fallbacks: si no existe o no viene, se rechaza.
    */
   private async resolveTenantId(tenantId?: string): Promise<string> {
-    if (tenantId) {
-      const tenantExists = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-      });
-      if (tenantExists) {
-        return tenantExists.id;
-      }
+    if (!tenantId) {
+      throw new BadRequestException('Acceso denegado: No se especificó un local (tenantId) válido.');
     }
 
-    // 🛡️ RESGUARDO AUTOMÁTICO: Evita el error "El local especificado no existe"
-    const fallbackTenant = await this.prisma.tenant.findFirst();
-    if (!fallbackTenant) {
-      throw new BadRequestException('No hay ningún local registrado en la base de datos.');
+    const tenantExists = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenantExists) {
+      throw new NotFoundException('El local especificado no existe en la base de datos.');
     }
-    
-    return fallbackTenant.id;
+
+    return tenantExists.id;
   }
 
   // 1. Crear Venta / Registro de Dispositivo
@@ -167,7 +164,7 @@ export class DevicesService {
     return updatedDevice;
   }
 
-  // 3. Listar TODOS los dispositivos (Superadmin)
+  // 3. Listar TODOS los dispositivos (Exclusivo para Superadmin)
   async getAllDevicesForSuperAdmin() {
     return this.prisma.device.findMany({
       include: {
@@ -177,7 +174,7 @@ export class DevicesService {
     });
   }
 
-  // 4. Listar dispositivos por tenant
+  // 4. Listar dispositivos exclusivamente por tenant
   async getDevicesByTenant(tenantId: string) {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
     return this.prisma.device.findMany({
