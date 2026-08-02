@@ -34,7 +34,7 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
 
   useEffect(() => {
     let role = getRoleFromToken() || localStorage.getItem('role') || '';
-    setUserRole(role.toUpperCase());
+    setUserRole(role.trim().toUpperCase());
   }, []);
 
   const handleLogout = () => {
@@ -44,7 +44,8 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
     router.push('/login');
   };
 
-  // 🔒 REGLA ESTRICTA: "Locales" SOLO se muestra si es SUPERADMIN real (ignora a TENANT_ADMIN)
+  // 🛡️ REGLA DE HIERRO: SOLO se muestra si es SUPERADMIN exacto. 
+  // Si es TENANT_ADMIN o cualquier otro, dará false automáticamente.
   const isSuperAdmin = userRole === 'SUPERADMIN';
 
   const navItems = [
