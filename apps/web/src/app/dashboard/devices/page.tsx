@@ -57,6 +57,20 @@ export default function DevicesPage() {
     return now.toISOString().split('T')[0];
   };
 
+  const calculateNextDueDate = (currentDueDate?: string, frequency?: string) => {
+    const baseDate = currentDueDate ? new Date(currentDueDate) : new Date();
+    const targetDate = isNaN(baseDate.getTime()) ? new Date() : baseDate;
+
+    if (frequency === 'SEMANAL') {
+      targetDate.setDate(targetDate.getDate() + 7);
+    } else if (frequency === 'QUINCENAL') {
+      targetDate.setDate(targetDate.getDate() + 15);
+    } else {
+      targetDate.setMonth(targetDate.getMonth() + 1);
+    }
+    return targetDate.toISOString().split('T')[0];
+  };
+
   const handleFrequencyChange = (newFreq: string) => {
     setPaymentFrequency(newFreq);
     setDueDate(calculateDefaultDueDate(newFreq));
@@ -160,6 +174,47 @@ export default function DevicesPage() {
     }
   };
 
+  // 💵 MÓDULO DE COBRANZAS: REGISTRAR PAGO Y DESBLOQUEAR AUTOMÁTICAMENTE
+  const handleRegisterPayment = async (dev: Device) => {
+    const total = dev.totalInstallments || 12;
+    const currentPaid = dev.paidInstallments || 0;
+
+    if (currentPaid >= total) {
+      alert('¡Este equipo ya completó el 100% de las cuotas del plan de financiación!');
+      return;
+    }
+
+    const nextPaid = currentPaid + 1;
+    const nextDueDate = calculateNextDueDate(dev.dueDate, dev.paymentFrequency);
+
+    if (!confirm(`¿Registrar pago de la cuota ${nextPaid}/${total} para ${dev.buyerName || dev.model}? Esto actualizará el vencimiento al ${nextDueDate} y desbloqueará el equipo si estaba en mora.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/v1/devices/${dev.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tenantId: DEMO_TENANT_ID,
+          paidInstallments: nextPaid,
+          dueDate: nextDueDate,
+          status: 'ACTIVE', // Desbloqueo automático al pagar
+        }),
+      });
+
+      if (!response.ok) throw new Error('Error al registrar el pago');
+      loadDevices();
+    } catch (err: any) {
+      console.error('Error registrando pago:', err);
+      alert(err.message || 'No se pudo registrar el pago');
+    }
+  };
+
   const handleToggleStatus = async (id: string, currentStatus?: string) => {
     const newStatus = currentStatus === 'LOCKED' ? 'ACTIVE' : 'LOCKED';
     try {
@@ -220,7 +275,7 @@ export default function DevicesPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#111827] border border-gray-800 p-6 rounded-2xl shadow-xl">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Flota y Dispositivos MDM</h1>
-            <p className="text-xs text-gray-400 mt-1">Gestión integral de equipos, financiación y bloqueo remoto</p>
+            <p className="text-xs text-gray-400 mt-1">Gestión integral de equipos, cobros de cuotas y bloqueo remoto</p>
           </div>
           <button
             onClick={() => {
@@ -308,6 +363,11 @@ export default function DevicesPage() {
                       <span className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-300">
                         💻 IMEI: {dev.imei || 'Pendiente'}
                       </span>
+                      {dev.dueDate && (
+                        <span className="bg-gray-800 px-3 py-1 rounded-lg text-gray-300">
+                          📅 Vence: <strong className="text-white">{dev.dueDate}</strong>
+                        </span>
+                      )}
                     </div>
 
                     {(dev.price || dev.totalInstallments) && (
@@ -325,19 +385,27 @@ export default function DevicesPage() {
                           <span className="font-semibold text-indigo-300">${dev.installmentAmount?.toLocaleString('es-AR', { maximumFractionDigits: 2 }) || '0'}</span>
                         </div>
                         <div>
-                          <span className="text-gray-500 block">Avance</span>
-                          <span className="font-semibold text-white">{dev.paidInstallments || 0}/{dev.totalInstallments || 12} cuotas</span>
+                          <span className="text-gray-500 block">Avance de Cuotas</span>
+                          <span className="font-semibold text-emerald-400">{dev.paidInstallments || 0} de {dev.totalInstallments || 12} pagadas</span>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* ACCIONES Y BOTÓN DE COBRANZA */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleRegisterPayment(dev)}
+                      className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/40 cursor-pointer shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5"
+                    >
+                      <span>💵</span> Registrar Pago
+                    </button>
+
                     <button
                       onClick={() => handleToggleStatus(dev.id, dev.status)}
                       className={`px-4 py-2 text-xs font-semibold rounded-xl border cursor-pointer ${
                         isLocked
-                          ? 'bg-emerald-600 text-white border-emerald-500/40'
+                          ? 'bg-indigo-600 text-white border-indigo-500/40'
                           : 'bg-red-600 text-white border-red-500/40'
                       }`}
                     >
