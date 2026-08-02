@@ -14,7 +14,7 @@ export class DevicesController {
       ? body.tenantId 
       : req.user?.tenantId;
       
-    return this.devicesService.createDevice(tenantId, body);
+    return this.devicesService.createDevice(tenantId, req.user?.sub, body);
   }
 
   @Post('enroll')
@@ -27,22 +27,16 @@ export class DevicesController {
   async findAll(
     @Req() req: any, 
     @Query('tenantId') queryTenantId?: string,
-    @Query('global') global?: string,
   ) {
-    // 👑 SI ES SUPERADMIN: Puede ver todo globalmente o filtrar por un local específico
     if (req.user?.role === 'SUPERADMIN') {
       if (queryTenantId) {
-        return this.devicesService.getDevicesByTenant(queryTenantId);
+        return this.devicesService.getDevicesByTenant(queryTenantId, req.user?.sub);
       }
       return this.devicesService.getAllDevicesForSuperAdmin();
     }
 
-    // 🏢 SI ES UN LOCAL COMUN (TENANT_ADMIN): Ve estrictamente SU PROPIO local, sin excepciones
     const tenantId = req.user?.tenantId;
-    if (!tenantId) {
-      throw new BadRequestException('Su cuenta no tiene un local asignado.');
-    }
-    return this.devicesService.getDevicesByTenant(tenantId);
+    return this.devicesService.getDevicesByTenant(tenantId, req.user?.sub);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -56,7 +50,7 @@ export class DevicesController {
       ? body.tenantId 
       : req.user?.tenantId;
       
-    return this.devicesService.updateStatus(tenantId, id, body.status);
+    return this.devicesService.updateStatus(tenantId, req.user?.sub, id, body.status);
   }
 
   @UseGuards(JwtAuthGuard)

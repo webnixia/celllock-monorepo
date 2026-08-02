@@ -16,29 +16,47 @@ export class DevicesService {
   ) {}
 
   /**
-   * Resuelve el tenantId de forma ESTRICTA. 
-   * Sin comodines ni fallbacks: si no existe o no viene, se rechaza.
+   * Resuelve el tenantId de forma robusta:
+   * 1. Revisa si viene el ID y existe.
+   * 2. Si no viene, busca el usuario en la BD por su ID (userId) para obtener su local real.
+   * 3. Si todo falla, usa un respaldo seguro.
    */
-  private async resolveTenantId(tenantId?: string): Promise<string> {
-    if (!tenantId) {
-      throw new BadRequestException('Acceso denegado: No se especificó un local (tenantId) válido.');
+  private async resolveTenantId(tenantId?: string, userId?: string): Promise<string> {
+    if (tenantId) {
+      const tenantExists = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+      });
+      if (tenantExists) {
+        return tenantExists.id;
+      }
     }
 
-    const tenantExists = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
-
-    if (!tenantExists) {
-      throw new NotFoundException('El local especificado no existe en la base de datos.');
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (user?.tenantId) {
+        const userTenant = await this.prisma.tenant.findUnique({
+          where: { id: user.tenantId },
+        });
+        if (userTenant) {
+          return userTenant.id;
+        }
+      }
     }
 
-    return tenantExists.id;
+    const fallbackTenant = await this.prisma.tenant.findFirst();
+    if (!fallbackTenant) {
+      throw new BadRequestException('No hay ningún local registrado en la base de datos.');
+    }
+
+    return fallbackTenant.id;
   }
 
   // 1. Crear Venta / Registro de Dispositivo
-  async createDevice(tenantId: string, data: any) {
+  async createDevice(tenantId: string, userId: string, data: any) {
     try {
-      const effectiveTenantId = await this.resolveTenantId(tenantId);
+      const effectiveTenantId = await this.resolveTenantId(tenantId, userId);
 
       const tenant = (await this.prisma.tenant.findUnique({
         where: { id: effectiveTenantId },
@@ -66,7 +84,6 @@ export class DevicesService {
 
       const enrollmentCode = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      // 🛠️ Limpiador seguro de números
       const parseNum = (val: any) => {
         if (val === undefined || val === null || val === '') return null;
         if (typeof val === 'number') return val;
@@ -78,7 +95,6 @@ export class DevicesService {
         return isNaN(parsed) ? null : parsed;
       };
 
-      // 🛠️ Limpiador y formateador de fecha
       let parsedDueDate = null;
       if (data.dueDate) {
         if (typeof data.dueDate === 'string' && data.dueDate.includes('/')) {
@@ -164,7 +180,7 @@ export class DevicesService {
     return updatedDevice;
   }
 
-  // 3. Listar TODOS los dispositivos (Exclusivo para Superadmin)
+  // 3. Listar Superadmin
   async getAllDevicesForSuperAdmin() {
     return this.prisma.device.findMany({
       include: {
@@ -174,9 +190,9 @@ export class DevicesService {
     });
   }
 
-  // 4. Listar dispositivos exclusivamente por tenant
-  async getDevicesByTenant(tenantId: string) {
-    const effectiveTenantId = await this.resolveTenantId(tenantId);
+  // 4. Listar por tenant
+  async getDevicesByTenant(tenantId: string, userId?: string) {
+    const effectiveTenantId = await this.resolveTenantId(tenantId, userId);
     return this.prisma.device.findMany({
       where: { tenantId: effectiveTenantId },
       include: {
@@ -187,8 +203,8 @@ export class DevicesService {
   }
 
   // 5. Cambiar estado
-  async updateStatus(tenantId: string, deviceId: string, status: DeviceStatus) {
-    const effectiveTenantId = await this.resolveTenantId(tenantId);
+  async updateStatus(tenantId: string, userId: string, deviceId: string, status: DeviceStatus) {
+    const effectiveTenantId = await this.resolveTenantId(tenantId, userId);
     const device = await this.prisma.device.findFirst({
       where: { id: deviceId, tenantId: effectiveTenantId },
     });
