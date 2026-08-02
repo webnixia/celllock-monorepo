@@ -46,11 +46,11 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
 
   const isSuperAdmin = userRole === 'SUPERADMIN';
 
+  // Menú simplificado y optimizado para comercios individuales
   const navItems = [
     { label: 'Dashboard', href: '/', icon: '📊', show: true },
     { label: 'Dispositivos', href: '/dashboard/devices', icon: '💻', show: true },
     { label: 'Locales', href: '/dashboard/tenants', icon: '🏢', show: isSuperAdmin },
-    { label: 'Usuarios / Personal', href: '/users', icon: '👥', show: true },
     { label: 'Configuración', href: '/settings', icon: '⚙️', show: true },
   ];
 
