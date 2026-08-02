@@ -84,7 +84,6 @@ export default function DevicesPage() {
         return;
       }
 
-      // Usamos la ruta exacta con /api/v1/devices y tenantId
       const response = await fetch(`${API_URL}/api/v1/devices?tenantId=${DEMO_TENANT_ID}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
