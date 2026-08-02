@@ -23,10 +23,10 @@ interface Device {
   createdAt?: string;
 }
 
-// Usamos la misma ruta base probada y exitosa
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const DEMO_TENANT_ID = 'tenant-demo-id';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 
-export default function DevicesFleetPage() {
+export default function DevicesPage() {
   const router = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,7 @@ export default function DevicesFleetPage() {
   const [price, setPrice] = useState('');
   const [downPayment, setDownPayment] = useState('');
   const [totalInstallments, setTotalInstallments] = useState('12');
+  const [installmentAmount, setInstallmentAmount] = useState('');
   const [paymentFrequency, setPaymentFrequency] = useState('MENSUAL');
   const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +68,14 @@ export default function DevicesFleetPage() {
   const balanceToFinance = Math.max(0, parsedPrice - parsedDownPayment);
   const calculatedInstallment = parsedTotalInstallments > 0 ? balanceToFinance / parsedTotalInstallments : 0;
 
+  useEffect(() => {
+    if (balanceToFinance > 0 && parsedTotalInstallments > 0) {
+      setInstallmentAmount(calculatedInstallment.toFixed(2));
+    } else {
+      setInstallmentAmount('');
+    }
+  }, [price, downPayment, totalInstallments]);
+
   const loadDevices = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -75,8 +84,8 @@ export default function DevicesFleetPage() {
         return;
       }
 
-      // Hacemos el llamado exactamente igual al Dashboard que te funciona
-      const response = await fetch(`${API_URL}/devices`, {
+      // Usamos la ruta exacta con /api/v1/devices y tenantId
+      const response = await fetch(`${API_URL}/api/v1/devices?tenantId=${DEMO_TENANT_ID}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -106,13 +115,14 @@ export default function DevicesFleetPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/devices`, {
+      const response = await fetch(`${API_URL}/api/v1/devices`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          tenantId: DEMO_TENANT_ID,
           model: model.trim(),
           imei: imei.trim() || null,
           buyerName: buyerName.trim() || null,
@@ -120,7 +130,7 @@ export default function DevicesFleetPage() {
           buyerPhone: buyerPhone.trim() || null,
           price: price ? parseFloat(price) : null,
           downPayment: downPayment ? parseFloat(downPayment) : null,
-          installmentAmount: calculatedInstallment > 0 ? calculatedInstallment : null,
+          installmentAmount: installmentAmount ? parseFloat(installmentAmount) : null,
           totalInstallments: totalInstallments ? parseInt(totalInstallments) : null,
           paymentFrequency,
           dueDate: dueDate || null,
@@ -128,8 +138,8 @@ export default function DevicesFleetPage() {
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || 'Error al registrar el dispositivo');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Error al registrar el dispositivo');
       }
 
       setModel('');
@@ -139,6 +149,7 @@ export default function DevicesFleetPage() {
       setBuyerPhone('');
       setPrice('');
       setDownPayment('');
+      setInstallmentAmount('');
       setTotalInstallments('12');
       setDueDate('');
       setIsModalOpen(false);
@@ -154,13 +165,13 @@ export default function DevicesFleetPage() {
     const newStatus = currentStatus === 'LOCKED' ? 'ACTIVE' : 'LOCKED';
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_URL}/devices/${id}/status`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ tenantId: DEMO_TENANT_ID, status: newStatus }),
       });
       loadDevices();
     } catch (err) {
@@ -172,7 +183,7 @@ export default function DevicesFleetPage() {
     if (!confirm('¿Seguro de dar de baja este equipo?')) return;
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_URL}/devices/${id}`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -197,7 +208,7 @@ export default function DevicesFleetPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b0f19] text-white flex items-center justify-center">
-        <p className="text-indigo-400 animate-pulse font-medium">Cargando dispositivos...</p>
+        <p className="text-indigo-400 animate-pulse font-medium">Cargando flota de dispositivos...</p>
       </div>
     );
   }
@@ -210,7 +221,7 @@ export default function DevicesFleetPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#111827] border border-gray-800 p-6 rounded-2xl shadow-xl">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Flota y Dispositivos MDM</h1>
-            <p className="text-xs text-gray-400 mt-1">Monitoreo en tiempo real y bloqueo inteligente de equipos</p>
+            <p className="text-xs text-gray-400 mt-1">Gestión integral de equipos, financiación y bloqueo remoto</p>
           </div>
           <button
             onClick={() => {
@@ -219,7 +230,7 @@ export default function DevicesFleetPage() {
             }}
             className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 cursor-pointer"
           >
-            + Registrar Nuevo Equipo
+            + Registrar Nueva Venta / Financiación
           </button>
         </div>
 
@@ -259,7 +270,7 @@ export default function DevicesFleetPage() {
         {filteredDevices.length === 0 ? (
           <div className="text-center py-20 bg-[#111827] border border-gray-800 rounded-2xl space-y-3">
             <span className="text-4xl">📂</span>
-            <p className="text-gray-300 font-medium">No se encontraron dispositivos</p>
+            <p className="text-gray-300 font-medium">No se encontraron dispositivos registrados</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
@@ -449,7 +460,7 @@ export default function DevicesFleetPage() {
                     <input
                       type="text"
                       readOnly
-                      value={calculatedInstallment > 0 ? `$${calculatedInstallment.toFixed(2)}` : '$0'}
+                      value={installmentAmount ? `$${installmentAmount}` : '$0'}
                       className="w-full px-3.5 py-2.5 bg-[#1f2937] border border-indigo-500/50 text-indigo-300 font-bold rounded-xl text-sm"
                     />
                   </div>
