@@ -241,17 +241,22 @@ export default function DevicesFleetPage() {
           </div>
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-            {['ALL', 'ACTIVE', 'PENDING_ENROLLMENT', 'LOCKED'].map((st) => (
+            {[
+              { label: 'Todos', value: 'ALL' },
+              { label: 'Activos', value: 'ACTIVE' },
+              { label: 'Pendientes', value: 'PENDING_ENROLLMENT' },
+              { label: 'Bloqueados', value: 'LOCKED' },
+            ].map((st) => (
               <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
+                key={st.value}
+                onClick={() => setStatusFilter(st.value)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  statusFilter === st
+                  statusFilter === st.value
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                     : 'bg-[#1f2937] text-gray-400 hover:text-white border border-gray-700/50'
                 }`}
               >
-                {st === 'ALL' ? 'Todos' : st === 'ACTIVE' ? 'Activos' : st === 'PENDING_ENROLLMENT' ? 'Pendientes' : 'Bloqueados'}
+                {st.label}
               </button>
             ))}
           </div>
