@@ -21,6 +21,9 @@ interface Device {
   tenant?: { name: string };
 }
 
+// URL dinámica para que funcione tanto en local como en producción en Vercel/Railway
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +50,7 @@ export default function DevicesPage() {
   const fetchDevices = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/devices`, {
+      const res = await fetch(`${API_URL}/devices`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -72,7 +75,7 @@ export default function DevicesPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/devices`, {
+      const res = await fetch(`${API_URL}/devices`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +110,7 @@ export default function DevicesPage() {
   const updateStatus = async (id: string, newStatus: string) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/devices/${id}/status`, {
+      const res = await fetch(`${API_URL}/devices/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +128,7 @@ export default function DevicesPage() {
     if (!confirm('¿Estás seguro de eliminar este registro?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/devices/${id}`, {
+      const res = await fetch(`${API_URL}/devices/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
