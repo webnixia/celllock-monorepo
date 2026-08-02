@@ -23,19 +23,28 @@ export class DevicesController {
     return this.devicesService.enrollDevice(body.enrollmentCode, body.imei);
   }
 
-  @UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
   @Get()
   async findAll(
     @Req() req: any, 
     @Query('tenantId') queryTenantId?: string,
     @Query('global') global?: string,
   ) {
-    // 🔒 Solo muestra TODO si el superadmin lo pide explícitamente con ?global=true
-    if (req.user?.role === 'SUPERADMIN' && global === 'true') {
-      return this.devicesService.getAllDevicesForSuperAdmin();
+    // 🛡️ Si es SuperAdmin:
+    if (req.user?.role === 'SUPERADMIN') {
+      // Si pide ver todo globalmente
+      if (global === 'true') {
+        return this.devicesService.getAllDevicesForSuperAdmin();
+      }
+      // Si selecciona un local específico para ver sus detalles
+      if (queryTenantId) {
+        return this.devicesService.getDevicesByTenant(queryTenantId);
+      }
+      // Por defecto, el admin principal no mezcla dispositivos en su propio dashboard personal
+      return []; 
     }
 
-    // Por defecto, usa el local consultado o el del usuario logueado (incluso para el admin)
+    // Para los usuarios normales de un local
     const tenantId = queryTenantId || req.user?.tenantId;
     return this.devicesService.getDevicesByTenant(tenantId);
   }

@@ -14,8 +14,8 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
   const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
-    // Leemos el rol o tipo de usuario guardado al loguearse
-    const role = localStorage.getItem('role') || '';
+    // Leemos el rol y lo pasamos a mayúsculas para evitar problemas de formato
+    const role = (localStorage.getItem('role') || '').toUpperCase();
     setUserRole(role);
   }, []);
 
@@ -25,12 +25,14 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
     router.push('/login');
   };
 
+  // Verificamos si es administrador o superadmin para mostrar los locales
+  const isAdminOrSuper = userRole.includes('ADMIN') || userRole === 'SUPERADMIN';
+
   // Definimos las opciones del menú de forma dinámica
   const navItems = [
     { label: 'Dashboard', href: '/', icon: '📊', show: true },
     { label: 'Dispositivos', href: '/dashboard/devices', icon: '📱', show: true },
-    // 🏢 La opción de "Locales" solo se muestra si el rol es SUPERADMIN
-    { label: 'Locales', href: '/dashboard/tenants', icon: '🏢', show: userRole === 'SUPERADMIN' },
+    { label: 'Locales', href: '/dashboard/tenants', icon: '🏢', show: isAdminOrSuper },
     { label: 'Usuarios / Personal', href: '/users', icon: '👥', show: true },
     { label: 'Configuración', href: '/settings', icon: '⚙️', show: true },
   ];
@@ -46,7 +48,7 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
           <div>
             <h1 className="font-bold text-white tracking-tight text-base leading-tight">ControlCell</h1>
             <p className="text-[11px] text-indigo-400 font-medium">
-              {userRole === 'SUPERADMIN' ? 'Super Admin' : 'MDM Admin'}
+              {userRole.includes('SUPERADMIN') ? 'Super Admin' : 'MDM Admin'}
             </p>
           </div>
         </div>
