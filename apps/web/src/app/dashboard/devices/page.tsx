@@ -306,7 +306,7 @@ export default function DevicesPage() {
                         🔑 QR: <strong className="text-white">{dev.enrollmentCode}</strong>
                       </span>
                       <span className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-300">
-                        📱 IMEI: {dev.imei || 'Pendiente'}
+                        💻 IMEI: {dev.imei || 'Pendiente'}
                       </span>
                     </div>
 

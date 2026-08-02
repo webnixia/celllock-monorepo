@@ -44,13 +44,11 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
     router.push('/login');
   };
 
-  // 🛡️ REGLA DE HIERRO: SOLO se muestra si es SUPERADMIN exacto. 
-  // Si es TENANT_ADMIN o cualquier otro, dará false automáticamente.
   const isSuperAdmin = userRole === 'SUPERADMIN';
 
   const navItems = [
     { label: 'Dashboard', href: '/', icon: '📊', show: true },
-    { label: 'Dispositivos', href: '/dashboard/devices', icon: '📱', show: true },
+    { label: 'Dispositivos', href: '/dashboard/devices', icon: '💻', show: true },
     { label: 'Locales', href: '/dashboard/tenants', icon: '🏢', show: isSuperAdmin },
     { label: 'Usuarios / Personal', href: '/users', icon: '👥', show: true },
     { label: 'Configuración', href: '/settings', icon: '⚙️', show: true },
@@ -59,15 +57,17 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
   return (
     <aside className="w-64 bg-[#111827] border-r border-gray-800 min-h-screen flex flex-col justify-between p-4 sticky top-0 h-screen shrink-0">
       <div className="space-y-6">
-        {/* LOGO & BRAND */}
+        {/* LOGO DE MARCA PROFESIONAL */}
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-xl">
-            📱
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30 border border-indigo-400/30">
+            CC
           </div>
           <div>
-            <h1 className="font-bold text-white tracking-tight text-base leading-tight">ControlCell</h1>
-            <p className="text-[11px] text-indigo-400 font-medium">
-              {userRole === 'SUPERADMIN' ? 'Super Admin' : 'MDM Admin'}
+            <h1 className="font-bold text-white tracking-tight text-sm leading-tight flex items-center gap-1.5">
+              ControlCell <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+            </h1>
+            <p className="text-[10px] text-indigo-400 font-semibold tracking-wider uppercase">
+              {userRole === 'SUPERADMIN' ? 'Super Admin' : 'MDM Enterprise'}
             </p>
           </div>
         </div>
