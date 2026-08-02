@@ -8,27 +8,34 @@ interface SidebarProps {
   organizationName?: string;
 }
 
+// Función auxiliar para leer el rol directamente del token JWT de forma segura
+function getRoleFromToken(): string {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return '';
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const decoded = JSON.parse(jsonPayload);
+    return decoded.role || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
-    // Buscamos el rol ya sea directo o dentro del objeto user en localStorage
-    let role = localStorage.getItem('role') || '';
-    
-    if (!role) {
-      try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          role = parsed.role || '';
-        }
-      } catch (e) {
-        console.error('Error leyendo usuario de localStorage', e);
-      }
-    }
-
+    // Intentamos obtener el rol del token JWT o del localStorage
+    let role = getRoleFromToken() || localStorage.getItem('role') || '';
     setUserRole(role.toUpperCase());
   }, []);
 
@@ -76,7 +83,7 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
         {/* NAV MENU */}
         <nav className="space-y-1">
           {navItems
-            .filter((item) => item.show) // Filtramos solo los elementos permitidos para este rol
+            .filter((item) => item.show)
             .map((item, idx) => {
               const isActive = pathname === item.href && (item.label === 'Dashboard' || pathname !== '/');
               return (
