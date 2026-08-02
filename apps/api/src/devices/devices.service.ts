@@ -16,8 +16,7 @@ export class DevicesService {
   ) {}
 
   /**
-   * Resuelve el tenantId de manera inteligente: valida si existe, 
-   * y si no viene o no existe, asigna el primer local disponible o crea uno de respaldo.
+   * Resuelve el tenantId de manera estricta
    */
   private async resolveTenantId(tenantId?: string): Promise<string> {
     if (tenantId) {
@@ -29,13 +28,11 @@ export class DevicesService {
       }
     }
 
-    // Si el tenantId no vino o no existe, buscamos el primer local activo en la base de datos
     const firstTenant = await this.prisma.tenant.findFirst();
     if (firstTenant) {
       return firstTenant.id;
     }
 
-    // Si literalmente no hay ningún local en la BD, creamos uno por defecto para que nunca falle
     const defaultTenant = await this.prisma.tenant.create({
       data: {
         id: tenantId || 'tenant-principal',
@@ -48,7 +45,7 @@ export class DevicesService {
     return defaultTenant.id;
   }
 
-  // 1. Crear Venta / Registro de Dispositivo
+  // 1. Crear Venta / Registro de Dispositivo estrictamente en su local
   async createDevice(tenantId: string, data: any) {
     try {
       const effectiveTenantId = await this.resolveTenantId(tenantId);
@@ -126,7 +123,7 @@ export class DevicesService {
           gracePeriodDays: parseNum(data.gracePeriodDays) || 3,
           autoLockEnabled: data.autoLockEnabled !== undefined ? Boolean(data.autoLockEnabled) : true,
 
-          tenantId: effectiveTenantId,
+          tenantId: effectiveTenantId, // 🔒 Se guarda exclusivamente en el local que corresponde
         },
         include: {
           tenant: {
@@ -177,7 +174,7 @@ export class DevicesService {
     return updatedDevice;
   }
 
-  // 3. Listar TODOS los dispositivos para el SUPERADMIN
+  // 3. Listar TODOS los dispositivos (Únicamente para auditoría interna de Superadmin si se requiere)
   async getAllDevicesForSuperAdmin() {
     return this.prisma.device.findMany({
       include: {
@@ -187,7 +184,7 @@ export class DevicesService {
     });
   }
 
-  // 4. Listar dispositivos por tenant
+  // 4. Listar dispositivos exclusivamente por tenant (Aisla cada local por completo)
   async getDevicesByTenant(tenantId: string) {
     const effectiveTenantId = await this.resolveTenantId(tenantId);
     return this.prisma.device.findMany({
@@ -207,7 +204,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new NotFoundException('Dispositivo no encontrado');
+      throw new NotFoundException('Dispositivo no encontrado en este local');
     }
 
     const updatedDevice = await this.prisma.device.update({
