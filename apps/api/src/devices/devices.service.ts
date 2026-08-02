@@ -15,36 +15,25 @@ export class DevicesService {
     private readonly firebaseService: FirebaseService,
   ) {}
 
-  /**
-   * Resuelve el tenantId de manera estricta
+/**
+   * Resuelve el tenantId de forma estricta y segura. 
+   * Si no viene, lanza error en lugar de mezclar datos con otro local.
    */
   private async resolveTenantId(tenantId?: string): Promise<string> {
-    if (tenantId) {
-      const tenantExists = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-      });
-      if (tenantExists) {
-        return tenantExists.id;
-      }
+    if (!tenantId) {
+      throw new BadRequestException('Acceso denegado: El token no contiene un local (tenantId) válido.');
     }
 
-    const firstTenant = await this.prisma.tenant.findFirst();
-    if (firstTenant) {
-      return firstTenant.id;
-    }
-
-    const defaultTenant = await this.prisma.tenant.create({
-      data: {
-        id: tenantId || 'tenant-principal',
-        name: 'ControlCell Local Principal',
-        slug: 'controlcell-principal',
-        isActive: true,
-      },
+    const tenantExists = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
     });
 
-    return defaultTenant.id;
-  }
+    if (!tenantExists) {
+      throw new NotFoundException('El local especificado no existe en la base de datos.');
+    }
 
+    return tenantExists.id;
+  }
   // 1. Crear Venta / Registro de Dispositivo estrictamente en su local
   async createDevice(tenantId: string, data: any) {
     try {

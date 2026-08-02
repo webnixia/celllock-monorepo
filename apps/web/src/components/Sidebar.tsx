@@ -14,14 +14,28 @@ export function Sidebar({ organizationName = 'ControlCell Corp' }: SidebarProps)
   const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
-    // Leemos el rol y lo pasamos a mayúsculas para evitar problemas de formato
-    const role = (localStorage.getItem('role') || '').toUpperCase();
-    setUserRole(role);
+    // Buscamos el rol ya sea directo o dentro del objeto user en localStorage
+    let role = localStorage.getItem('role') || '';
+    
+    if (!role) {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          role = parsed.role || '';
+        }
+      } catch (e) {
+        console.error('Error leyendo usuario de localStorage', e);
+      }
+    }
+
+    setUserRole(role.toUpperCase());
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    localStorage.removeItem('user');
     router.push('/login');
   };
 
