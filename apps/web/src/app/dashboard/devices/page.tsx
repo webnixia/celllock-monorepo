@@ -1,417 +1,574 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Sidebar } from '@/components/Sidebar';
 
 interface Device {
   id: string;
+  imei?: string;
   model: string;
-  imei: string | null;
-  enrollmentCode: string;
-  status: string;
-  buyerName: string | null;
-  buyerDni: string | null;
-  buyerPhone: string | null;
-  price: number | null;
-  downPayment: number | null;
-  installmentAmount: number | null;
-  totalInstallments: number | null;
-  paidInstallments: number;
-  dueDate: string | null;
-  tenant?: { name: string };
+  status?: string;
+  enrollmentCode?: string;
+  buyerName?: string;
+  buyerDni?: string;
+  buyerPhone?: string;
+  price?: number;
+  downPayment?: number;
+  installmentAmount?: number;
+  totalInstallments?: number;
+  paidInstallments?: number;
+  paymentFrequency?: string;
+  dueDate?: string;
+  createdAt?: string;
 }
 
-// URL dinámica para que funcione tanto en local como en producción en Vercel/Railway
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const DEMO_TENANT_ID = 'tenant-demo-id';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 
-export default function DevicesPage() {
+export default function DashboardPage() {
+  const router = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const router = useRouter();
 
-  // Estados del formulario de nueva venta
-  const [formData, setFormData] = useState({
-    model: '',
-    imei: '',
-    buyerName: '',
-    buyerDni: '',
-    buyerPhone: '',
-    price: '',
-    downPayment: '',
-    totalInstallments: '12',
-    dueDate: '',
-  });
-  const [formError, setFormError] = useState('');
+  // Campos Básicos
+  const [model, setModel] = useState('');
+  const [imei, setImei] = useState('');
+
+  // Comprador
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerDni, setBuyerDni] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+
+  // Financiamiento y Calculadora
+  const [price, setPrice] = useState('');
+  const [downPayment, setDownPayment] = useState('');
+  const [totalInstallments, setTotalInstallments] = useState('12');
+  const [installmentAmount, setInstallmentAmount] = useState('');
+  const [paymentFrequency, setPaymentFrequency] = useState('MENSUAL');
+  const [dueDate, setDueDate] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const fetchDevices = async () => {
+  // 🧮 1. CÁLCULO AUTOMÁTICO DE VENCIMIENTO SEGÚN FRECUENCIA
+  const calculateDefaultDueDate = (frequency: string) => {
+    const now = new Date();
+    if (frequency === 'SEMANAL') {
+      now.setDate(now.getDate() + 7);
+    } else if (frequency === 'QUINCENAL') {
+      now.setDate(now.getDate() + 15);
+    } else {
+      // MENSUAL
+      now.setMonth(now.getMonth() + 1);
+    }
+    return now.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+  };
+
+  const handleFrequencyChange = (newFreq: string) => {
+    setPaymentFrequency(newFreq);
+    setDueDate(calculateDefaultDueDate(newFreq));
+  };
+
+  // 🧮 2. CALCULADORA DE CUOTAS Y MONEDA EN TIEMPO REAL
+  const parsedPrice = parseFloat(price) || 0;
+  const parsedDownPayment = parseFloat(downPayment) || 0;
+  const parsedTotalInstallments = parseInt(totalInstallments) || 0;
+
+  const balanceToFinance = Math.max(0, parsedPrice - parsedDownPayment);
+  const calculatedInstallment = parsedTotalInstallments > 0 ? balanceToFinance / parsedTotalInstallments : 0;
+
+  useEffect(() => {
+    if (balanceToFinance > 0 && parsedTotalInstallments > 0) {
+      setInstallmentAmount(calculatedInstallment.toFixed(2));
+    } else {
+      setInstallmentAmount('');
+    }
+  }, [price, downPayment, totalInstallments]);
+
+  const loadDevices = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/devices`, {
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/v1/devices?tenantId=${DEMO_TENANT_ID}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setDevices(data);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Error al obtener dispositivos');
       }
-    } catch (e) {
-      console.error('Error cargando dispositivos', e);
+
+      const data = await response.json();
+      if (Array.isArray(data)) setDevices(data);
+    } catch (err) {
+      console.error('Error al cargar dispositivos:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDevices();
-  }, []);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    loadDevices();
+  }, [router]);
 
-  const handleCreateSale = async (e: React.FormEvent) => {
+  const handleCreateDevice = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError('');
     setSubmitting(true);
+    setErrorMsg('');
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/devices`, {
+      const response = await fetch(`${API_URL}/api/v1/devices`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          tenantId: DEMO_TENANT_ID,
+          model: model.trim(),
+          imei: imei.trim() || null,
+          buyerName: buyerName.trim() || null,
+          buyerDni: buyerDni.trim() || null,
+          buyerPhone: buyerPhone.trim() || null,
+          price: price ? parseFloat(price) : null,
+          downPayment: downPayment ? parseFloat(downPayment) : null,
+          installmentAmount: installmentAmount ? parseFloat(installmentAmount) : null,
+          totalInstallments: totalInstallments ? parseInt(totalInstallments) : null,
+          paymentFrequency,
+          dueDate: dueDate || null,
+        }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error al registrar la venta');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Error al registrar el dispositivo');
+      }
 
+      // Resetear campos
+      setModel('');
+      setImei('');
+      setBuyerName('');
+      setBuyerDni('');
+      setBuyerPhone('');
+      setPrice('');
+      setDownPayment('');
+      setInstallmentAmount('');
+      setTotalInstallments('12');
+      setDueDate('');
       setIsModalOpen(false);
-      setFormData({
-        model: '',
-        imei: '',
-        buyerName: '',
-        buyerDni: '',
-        buyerPhone: '',
-        price: '',
-        downPayment: '',
-        totalInstallments: '12',
-        dueDate: '',
-      });
-      fetchDevices();
+      loadDevices();
     } catch (err: any) {
-      setFormError(err.message);
+      setErrorMsg(err.message || 'Error al guardar');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const updateStatus = async (id: string, newStatus: string) => {
+  const handleToggleStatus = async (id: string, currentStatus?: string) => {
+    const newStatus = currentStatus === 'LOCKED' ? 'ACTIVE' : 'LOCKED';
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/devices/${id}/status`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ tenantId: DEMO_TENANT_ID, status: newStatus }),
       });
-      if (res.ok) fetchDevices();
-    } catch (e) {
-      console.error('Error actualizando estado', e);
+      loadDevices();
+    } catch (err) {
+      console.error('Error cambiando estado:', err);
     }
   };
 
-  const deleteDevice = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este registro?')) return;
+  const handleDeleteDevice = async (id: string) => {
+    if (!confirm('¿Seguro de dar de baja este equipo?')) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/devices/${id}`, {
+      await fetch(`${API_URL}/api/v1/devices/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) fetchDevices();
-    } catch (e) {
-      console.error('Error al eliminar', e);
+      loadDevices();
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const filteredDevices = devices.filter((d) => {
-    const matchesSearch =
-      d.model.toLowerCase().includes(search.toLowerCase()) ||
-      (d.buyerName && d.buyerName.toLowerCase().includes(search.toLowerCase())) ||
-      (d.buyerDni && d.buyerDni.includes(search)) ||
-      d.enrollmentCode.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'ALL' || d.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const getPaymentStatus = (dateStr?: string) => {
+    if (!dateStr) return { label: 'Sin Vencimiento', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' };
+    const now = new Date();
+    const due = new Date(dateStr);
+    const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 3600 * 24));
+
+    if (diffDays < 0) return { label: '⚠️ VENCIDO', color: 'text-red-400 bg-red-500/10 border-red-500/30 font-bold' };
+    if (diffDays <= 5) return { label: `⏰ Vence en ${diffDays}d`, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30 font-bold animate-pulse' };
+    return { label: '🟢 Al Día', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0b0f19] text-white flex items-center justify-center">
+        <p className="text-gray-400 animate-pulse">Cargando datos de ControlCell...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 space-y-8 bg-[#0b0f19] min-h-screen text-gray-100">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#111827] border border-gray-800 p-6 rounded-2xl shadow-xl">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            📱 Gestión de Dispositivos y Financiación
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Control MDM en tiempo real, seguimiento de cuotas y bloqueo inteligente de equipos financiados.
-          </p>
-        </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <span>➕</span> Nueva Venta / Financiación
-        </button>
-      </div>
+    <div className="flex min-h-screen bg-[#0b0f19] text-white">
+      <Sidebar organizationName="ControlCell Corp" />
 
-      {/* FILTROS Y BUSCADOR */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="w-full md:w-96 relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
-          <input
-            type="text"
-            placeholder="Buscar por modelo, cliente, DNI o código..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#111827] border border-gray-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all"
-          />
+      <main className="flex-1 p-8 space-y-6 overflow-y-auto">
+        {/* HEADER */}
+        <div className="flex justify-between items-center bg-[#111827] border border-gray-800 p-6 rounded-2xl shadow-xl">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Gestión de Financiación y Dispositivos</h1>
+            <p className="text-xs text-gray-400 mt-1">Cálculo automático de cuotas, financiación y bloqueo inteligente MDM</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-          {['ALL', 'ACTIVE', 'PENDING_ENROLLMENT', 'LOCKED', 'OVERDUE'].map((st) => (
+        {/* MÉTRICAS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-[#111827] border border-gray-800 p-5 rounded-2xl shadow-lg">
+            <p className="text-xs font-semibold uppercase text-gray-400">Total Equipos</p>
+            <p className="text-3xl font-bold mt-2">{devices.length}</p>
+          </div>
+          <div className="bg-[#111827] border border-gray-800 p-5 rounded-2xl shadow-lg">
+            <p className="text-xs font-semibold uppercase text-gray-400">Activos / Al Día</p>
+            <p className="text-3xl font-bold text-emerald-400 mt-2">
+              {devices.filter((d) => d.status === 'ACTIVE').length}
+            </p>
+          </div>
+          <div className="bg-[#111827] border border-gray-800 p-5 rounded-2xl shadow-lg">
+            <p className="text-xs font-semibold uppercase text-gray-400">Bloqueados por Mora</p>
+            <p className="text-3xl font-bold text-red-400 mt-2">
+              {devices.filter((d) => d.status === 'LOCKED').length}
+            </p>
+          </div>
+        </div>
+
+        {/* LISTADO DE DISPOSITIVOS */}
+        <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-semibold">Equipos y Ventas Registradas</h2>
             <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                statusFilter === st
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-[#111827] border border-gray-800 text-gray-400 hover:text-white'
-              }`}
+              onClick={() => {
+                setDueDate(calculateDefaultDueDate('MENSUAL'));
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
             >
-              {st === 'ALL' ? 'Todos' : st.replace('_', ' ')}
+              + Nueva Venta / Financiación
             </button>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* LISTADO DE DISPOSITIVOS */}
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">Cargando dispositivos con seguridad MDM...</div>
-      ) : filteredDevices.length === 0 ? (
-        <div className="bg-[#111827] border border-gray-800 rounded-2xl p-12 text-center space-y-3">
-          <span className="text-4xl">📂</span>
-          <p className="text-gray-300 font-medium">No se encontraron equipos registrados</p>
-          <p className="text-xs text-gray-500">Registra una nueva venta con el botón superior para empezar.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {filteredDevices.map((device) => (
-            <div
-              key={device.id}
-              className="bg-[#111827] border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-all shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
-            >
-              {/* INFO PRINCIPAL */}
-              <div className="space-y-2 flex-1">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-bold text-white tracking-wide">{device.model}</h3>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                      device.status === 'ACTIVE'
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : device.status === 'LOCKED'
-                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}
-                  >
-                    {device.status}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-                  {device.buyerName && (
-                    <span className="flex items-center gap-1 text-indigo-300 font-medium bg-indigo-500/10 px-2.5 py-1 rounded-lg">
-                      👤 {device.buyerName} {device.buyerDni ? `(DNI: ${device.buyerDni})` : ''}
-                    </span>
-                  )}
-                  <span className="bg-gray-800/80 px-2.5 py-1 rounded-lg font-mono text-gray-300">
-                    🔑 Enrolamiento: <strong className="text-white">{device.enrollmentCode}</strong>
-                  </span>
-                  <span className="bg-gray-800/80 px-2.5 py-1 rounded-lg font-mono text-gray-300">
-                    📱 IMEI: {device.imei || 'Pendiente de vinculación'}
-                  </span>
-                </div>
-
-                {/* DETALLE FINANCIERO */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 text-xs border-t border-gray-800/60 mt-3">
-                  <div>
-                    <span className="text-gray-500 block">Precio Total</span>
-                    <span className="font-semibold text-white">${device.price?.toLocaleString() || '0'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Entrega Inicial</span>
-                    <span className="font-semibold text-emerald-400">${device.downPayment?.toLocaleString() || '0'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Cuota Mensual</span>
-                    <span className="font-semibold text-indigo-400">${device.installmentAmount?.toLocaleString() || '0'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Progreso de Cuotas</span>
-                    <span className="font-semibold text-white">{device.paidInstallments} / {device.totalInstallments || 12} cuotas</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* BOTONES DE ACCIÓN RÁPIDA */}
-              <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-4 md:pt-0 border-gray-800">
-                {device.status === 'LOCKED' ? (
-                  <button
-                    onClick={() => updateStatus(device.id, 'ACTIVE')}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
-                  >
-                    🔓 Desbloquear
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => updateStatus(device.id, 'LOCKED')}
-                    className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-lg shadow-red-600/20 transition-all cursor-pointer"
-                  >
-                    🔒 Bloquear MDM
-                  </button>
-                )}
-                <button
-                  onClick={() => deleteDevice(device.id)}
-                  className="bg-gray-800 hover:bg-red-500/20 hover:text-red-400 text-gray-400 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-                  title="Eliminar registro"
-                >
-                  🗑️
-                </button>
-              </div>
+          {devices.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl">
+              <p className="text-gray-500 text-sm">No hay dispositivos registrados.</p>
             </div>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="space-y-3">
+              {devices.map((dev) => {
+                const isLocked = dev.status === 'LOCKED';
+                const isPending = dev.status === 'PENDING_ENROLLMENT';
+                const paymentInfo = getPaymentStatus(dev.dueDate);
 
-      {/* MODAL NUEVA VENTA */}
+                return (
+                  <div key={dev.id} className="p-4 bg-[#1f2937] border border-gray-700/60 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-sm">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-base">{dev.model}</p>
+                        {dev.buyerName && (
+                          <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md font-medium">
+                            👤 {dev.buyerName} {dev.buyerDni ? `(DNI: ${dev.buyerDni})` : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-gray-400">
+                        {dev.imei ? (
+                          <>IMEI: <span className="text-indigo-300 font-mono">{dev.imei}</span></>
+                        ) : (
+                          <span className="text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            📲 Código QR / Enrolamiento: <strong className="font-mono text-white">{dev.enrollmentCode}</strong>
+                          </span>
+                        )}
+                      </p>
+                      
+                      {/* INFORMACIÓN DE PLAN Y CUOTAS CON MONEDA */}
+                      {(dev.price || dev.totalInstallments) && (
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300 pt-1">
+                          {dev.price && <p>💵 Precio: <span className="font-semibold text-white">${dev.price.toLocaleString('es-AR')}</span></p>}
+                          {dev.downPayment && <p>💰 Entrega: <span className="font-semibold text-emerald-400">${dev.downPayment.toLocaleString('es-AR')}</span></p>}
+                          {dev.installmentAmount && (
+                            <p>📊 Cuota ({dev.paymentFrequency || 'MENSUAL'}): <span className="font-semibold text-indigo-300">${dev.installmentAmount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                          )}
+                          {dev.totalInstallments && (
+                            <p>🔢 Avance: <span className="font-semibold text-white">{dev.paidInstallments || 0}/{dev.totalInstallments} cuotas</span></p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`text-xs px-3 py-1 rounded-lg border font-medium ${paymentInfo.color}`}>
+                        {paymentInfo.label}
+                      </span>
+
+                      <span className={`text-xs px-3 py-1 rounded-full font-medium border ${
+                        isLocked
+                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                          : isPending
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
+                        {dev.status}
+                      </span>
+
+                      <button
+                        onClick={() => handleToggleStatus(dev.id, dev.status)}
+                        className={`px-3 py-1.5 text-xs rounded-lg border transition-all cursor-pointer font-medium ${
+                          isLocked
+                            ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/30'
+                            : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border-amber-500/30'
+                        }`}
+                      >
+                        {isLocked ? 'Desbloquear' : 'Bloquear'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteDevice(dev.id)}
+                        className="px-3 py-1.5 text-xs rounded-lg border bg-red-600/20 hover:bg-red-600/30 text-red-400 border-red-500/30 transition-all cursor-pointer font-medium"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* MODAL CON CALCULADORA, FORMATO PUNTOS/COMAS Y AUTO VENCIMIENTO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-lg p-6 space-y-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Registrar Nueva Venta / Financiación</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold cursor-pointer"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 my-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold">Registrar Nueva Venta / Financiación</h3>
+                <p className="text-xs text-gray-400">Cálculo de cuotas y vencimiento automático</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
             </div>
 
-            {formError && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-xs">
-                ⚠️ {formError}
+            {errorMsg && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg font-medium">
+                ⚠️ {errorMsg}
               </div>
             )}
 
-            <form onSubmit={handleCreateSale} className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Modelo del Celular *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. iPhone 13 o Samsung S23"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                  className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleCreateDevice} className="space-y-4">
+              {/* EQUIPO */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">IMEI (Opcional)</label>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Modelo *</label>
                   <input
                     type="text"
-                    placeholder="15 dígitos"
-                    value={formData.imei}
-                    onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
-                    className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    required
+                    placeholder="Ej: Samsung S23 Ultra"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">Cantidad de Cuotas</label>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">IMEI (Opcional)</label>
                   <input
-                    type="number"
-                    value={formData.totalInstallments}
-                    onChange={(e) => setFormData({ ...formData, totalInstallments: e.target.value })}
-                    className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    type="text"
+                    placeholder="Opcional (se autodetecta)"
+                    value={imei}
+                    onChange={(e) => setImei(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="space-y-3 pt-2 border-t border-gray-800">
-                <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Datos del Comprador</p>
-                <div className="grid grid-cols-2 gap-4">
+              {/* COMPRADOR */}
+              <div className="space-y-2 pt-2 border-t border-gray-800">
+                <p className="text-xs font-bold text-indigo-400 uppercase">👤 Datos del Comprador</p>
+                <div>
                   <input
                     type="text"
-                    placeholder="Nombre y Apellido"
-                    value={formData.buyerName}
-                    onChange={(e) => setFormData({ ...formData, buyerName: e.target.value })}
-                    className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    placeholder="Nombre y Apellido (ej: Juan Pérez)"
+                    value={buyerName}
+                    onChange={(e) => setBuyerName(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     placeholder="DNI / Cédula"
-                    value={formData.buyerDni}
-                    onChange={(e) => setFormData({ ...formData, buyerDni: e.target.value })}
-                    className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    value={buyerDni}
+                    onChange={(e) => setBuyerDni(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Teléfono (WhatsApp)"
+                    value={buyerPhone}
+                    onChange={(e) => setBuyerPhone(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
+              {/* FINANCIACIÓN Y CALCULADORA CON PUNTOS Y COMAS */}
               <div className="space-y-3 pt-2 border-t border-gray-800">
-                <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Financiación y Pagos</p>
-                <div className="grid grid-cols-2 gap-4">
+                <p className="text-xs font-bold text-emerald-400 uppercase">💵 Plan de Financiación</p>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-400 block mb-1">Precio Total ($)</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-semibold text-gray-400 uppercase">
+                        Precio Total ($)
+                      </label>
+                      {parsedPrice > 0 && (
+                        <span className="text-xs text-emerald-400 font-bold">
+                          ${parsedPrice.toLocaleString('es-AR')}
+                        </span>
+                      )}
+                    </div>
                     <input
-                      type="text"
-                      placeholder="500000"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      type="number"
+                      placeholder="Ej: 900000"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
                     />
                   </div>
+
                   <div>
-                    <label className="text-xs text-gray-400 block mb-1">Entrega Inicial ($)</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-semibold text-gray-400 uppercase">
+                        Entrega Inicial ($)
+                      </label>
+                      {parsedDownPayment > 0 && (
+                        <span className="text-xs text-emerald-400 font-bold">
+                          ${parsedDownPayment.toLocaleString('es-AR')}
+                        </span>
+                      )}
+                    </div>
                     <input
-                      type="text"
-                      placeholder="100000"
-                      value={formData.downPayment}
-                      onChange={(e) => setFormData({ ...formData, downPayment: e.target.value })}
-                      className="w-full bg-[#1f2937] border border-gray-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      type="number"
+                      placeholder="Ej: 100000"
+                      value={downPayment}
+                      onChange={(e) => setDownPayment(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Cant. Cuotas</label>
+                    <input
+                      type="number"
+                      value={totalInstallments}
+                      onChange={(e) => setTotalInstallments(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Frecuencia</label>
+                    <select
+                      value={paymentFrequency}
+                      onChange={(e) => handleFrequencyChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#1f2937] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="SEMANAL">Semanal (7 días)</option>
+                      <option value="QUINCENAL">Quincenal (15 días)</option>
+                      <option value="MENSUAL">Mensual (1 mes)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Valor Cuota ($)</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        calculatedInstallment > 0
+                          ? `$ ${calculatedInstallment.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : '$ 0,00'
+                      }
+                      className="w-full px-3 py-2 bg-[#1f2937] border border-indigo-500/50 text-indigo-300 font-bold rounded-lg text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* TARJETA DE RESUMEN FINANCIERO CON PUNTOS */}
+                {parsedPrice > 0 && (
+                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs space-y-1">
+                    <div className="flex justify-between text-gray-300">
+                      <span>Saldo a Financiar:</span>
+                      <strong className="text-white">${balanceToFinance.toLocaleString('es-AR')}</strong>
+                    </div>
+                    <div className="flex justify-between text-indigo-300 font-semibold">
+                      <span>Plan:</span>
+                      <span>
+                        {parsedTotalInstallments} cuotas de ${calculatedInstallment.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({paymentFrequency.toLowerCase()})
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+                    Próximo Vencimiento <span className="text-indigo-400 font-normal">(Auto-calculado)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1f2937] border border-indigo-500/40 text-white text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+              {/* BOTONES */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-800">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
                 >
-                  {submitting ? 'Guardando...' : 'Registrar Venta'}
+                  {submitting ? 'Guardando...' : 'Guardar Venta'}
                 </button>
               </div>
             </form>
