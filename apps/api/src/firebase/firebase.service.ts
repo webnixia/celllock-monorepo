@@ -10,17 +10,19 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
+      this.logger.log(`DEBUG ENV - PROJECT_ID: ${!!process.env.FIREBASE_PROJECT_ID}`);
+      this.logger.log(`DEBUG ENV - CLIENT_EMAIL: ${!!process.env.FIREBASE_CLIENT_EMAIL}`);
+      this.logger.log(`DEBUG ENV - PRIVATE_KEY: ${!!process.env.FIREBASE_PRIVATE_KEY}`);
+
       // 1. Intentar cargar desde variables de entorno individuales (Railway)
       if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
         let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
 
-        // Eliminar comillas envolventes si Railway las incluyó al pegar la variable
-        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-          privateKey = privateKey.slice(1, -1);
-        }
+        // Limpieza robusta de comillas envolventes
+        privateKey = privateKey.replace(/^["']|["']$/g, '');
 
-        // Convertir los \n literales en saltos de línea reales para la clave PEM
-        privateKey = privateKey.replace(/\\n/g, '\n');
+        // Reemplazar barras invertidas con 'n' y limpiar retornos de carro por completo
+        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\r/g, '');
 
         initializeApp({
           credential: cert({
