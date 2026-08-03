@@ -10,18 +10,27 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      // 1. Intentar cargar desde variables individuales (La forma más estable en Railway)
       const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
       const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
       let privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim();
 
       if (projectId && clientEmail && privateKey) {
+        // Limpiar comillas envolventes si las hubiera
         while ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
           privateKey = privateKey.slice(1, -1).trim();
         }
 
-        // Normalizar los saltos de línea de la llave privada de forma segura
+        // 1. Reemplazar escapes lógicos de saltos de línea
         privateKey = privateKey.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
+
+        // 2. RECONSTRUCTOR AUTOMÁTICO: Si Railway aplanó la llave en una sola línea, la reconstruimos por bloques PEM
+        if (privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('\n')) {
+          const header = '-----BEGIN PRIVATE KEY-----';
+          const footer = '-----END PRIVATE KEY-----';
+          let body = privateKey.replace(header, '').replace(footer, '').replace(/\s+/g, '');
+          const chunks = body.match(/.{1,64}/g) || [];
+          privateKey = `${header}\n${chunks.join('\n')}\n${footer}`;
+        }
 
         initializeApp({
           credential: cert({
@@ -35,33 +44,7 @@ export class FirebaseService implements OnModuleInit {
         return;
       }
 
-      // 2. Intentar cargar mediante la variable JSON completa (FIREBASE_SERVICE_ACCOUNT) como respaldo
-      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        try {
-          let rawValue = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-          while ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
-            rawValue = rawValue.slice(1, -1).trim();
-          }
-
-          const serviceAccount = JSON.parse(rawValue);
-          if (serviceAccount && serviceAccount.project_id && serviceAccount.private_key) {
-            serviceAccount.private_key = serviceAccount.private_key
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '')
-              .replace(/\r/g, '');
-
-            initializeApp({
-              credential: cert(serviceAccount),
-            });
-            this.logger.log('🔥 Firebase Firestore inicializado con éxito desde FIREBASE_SERVICE_ACCOUNT');
-            return;
-          }
-        } catch (jsonErr) {
-          this.logger.warn('No se pudo parsear FIREBASE_SERVICE_ACCOUNT, usando alternativas...');
-        }
-      }
-
-      // 3. Archivo local físico por respaldo
+      // Respaldo por archivo local físico
       const filePath = path.resolve(process.cwd(), 'firebase-service-account.json');
       if (fs.existsSync(filePath)) {
         initializeApp({
