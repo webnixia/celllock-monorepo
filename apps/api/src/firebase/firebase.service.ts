@@ -10,25 +10,51 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      // 1. Cargar mediante el JSON completo en variable de entorno (La forma más segura en Railway)
+      // 1. Intentar cargar mediante la variable JSON completa (FIREBASE_SERVICE_ACCOUNT)
       if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        let serviceAccountValue = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-        
-        // Limpiar comillas envolventes si las hubiera
-        while ((serviceAccountValue.startsWith('"') && serviceAccountValue.endsWith('"')) || (serviceAccountValue.startsWith("'") && serviceAccountValue.endsWith("'"))) {
-          serviceAccountValue = serviceAccountValue.slice(1, -1).trim();
+        let rawValue = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+        while ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+          rawValue = rawValue.slice(1, -1).trim();
         }
 
-        const serviceAccount = JSON.parse(serviceAccountValue);
-        
+        try {
+          const serviceAccount = JSON.parse(rawValue);
+          if (serviceAccount && serviceAccount.project_id) {
+            initializeApp({
+              credential: cert(serviceAccount),
+            });
+            this.logger.log('🔥 Firebase Firestore inicializado con éxito desde FIREBASE_SERVICE_ACCOUNT');
+            return;
+          } else {
+            this.logger.warn('FIREBASE_SERVICE_ACCOUNT no contiene el campo "project_id". Probando alternativas...');
+          }
+        } catch (jsonErr) {
+          this.logger.error('Error al parsear el JSON de FIREBASE_SERVICE_ACCOUNT:', jsonErr);
+        }
+      }
+
+      // 2. Intentar cargar desde variables de entorno individuales (Railway)
+      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+
+        while ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+          privateKey = privateKey.slice(1, -1).trim();
+        }
+
+        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
+
         initializeApp({
-          credential: cert(serviceAccount),
+          credential: cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey,
+          }),
         });
-        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde FIREBASE_SERVICE_ACCOUNT');
+        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde variables individuales');
         return;
       }
 
-      // 2. Intentar cargar desde archivo físico si existe localmente
+      // 3. Intentar cargar desde archivo físico local si existe
       const filePath = path.resolve(process.cwd(), 'firebase-service-account.json');
       if (fs.existsSync(filePath)) {
         initializeApp({
@@ -38,7 +64,7 @@ export class FirebaseService implements OnModuleInit {
         return;
       }
 
-      this.logger.warn('No se encontraron credenciales de Firebase. Inicialización omitida.');
+      this.logger.warn('No se encontraron credenciales válidas de Firebase. Inicialización omitida.');
     } catch (error) {
       this.logger.error('Error al intentar inicializar Firebase:', error);
     }
