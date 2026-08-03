@@ -10,6 +10,10 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
+      this.logger.log(`DEBUG ENV - PROJECT_ID: ${!!process.env.FIREBASE_PROJECT_ID}`);
+      this.logger.log(`DEBUG ENV - CLIENT_EMAIL: ${!!process.env.FIREBASE_CLIENT_EMAIL}`);
+      this.logger.log(`DEBUG ENV - PRIVATE_KEY: ${!!process.env.FIREBASE_PRIVATE_KEY}`);
+
       // 1. Intentar cargar desde variables de entorno individuales (Railway)
       if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
         let privateKey = process.env.FIREBASE_PRIVATE_KEY;
