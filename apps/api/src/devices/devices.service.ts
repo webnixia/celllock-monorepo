@@ -220,14 +220,27 @@ export class DevicesService {
 
     try {
       const docId = updatedDevice.imei || updatedDevice.id;
-      await this.firebaseService.updateDeviceStatus(docId, status);
+
+      // TRADUCCIÓN CLAVE PARA FIREBASE Y LA APP ANDROID:
+      // Mapeamos el estado del sistema al formato que escucha el celular
+      let firestoreStatus = 'AL_DIA';
+      const statusStr = String(status).toUpperCase();
+
+      if (statusStr === 'LOCKED' || statusStr === 'EN_MORA' || statusStr === 'SUSPENDED') {
+        firestoreStatus = 'EN_MORA';
+      } else if (statusStr === 'ACTIVE' || statusStr === 'AL_DIA') {
+        firestoreStatus = 'AL_DIA';
+      } else if (statusStr === 'UNENROLLED' || statusStr === 'LIBERADO') {
+        firestoreStatus = 'LIBERADO';
+      }
+
+      await this.firebaseService.updateDeviceStatus(docId, firestoreStatus);
     } catch (e) {
       console.error('Firebase sync error on status update:', e);
     }
 
     return updatedDevice;
   }
-
   // 6. Borrar dispositivo
   async removeDevice(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
@@ -241,4 +254,4 @@ export class DevicesService {
     }
     return this.prisma.device.delete({ where: { id } });
   }
-}
+} 
