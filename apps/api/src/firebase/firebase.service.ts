@@ -10,50 +10,31 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      this.logger.log(`DEBUG ENV - PROJECT_ID: ${!!process.env.FIREBASE_PROJECT_ID}`);
-      this.logger.log(`DEBUG ENV - CLIENT_EMAIL: ${!!process.env.FIREBASE_CLIENT_EMAIL}`);
-      this.logger.log(`DEBUG ENV - PRIVATE_KEY: ${!!process.env.FIREBASE_PRIVATE_KEY}`);
-
-      // 1. Intentar cargar desde variables de entorno individuales (Railway)
-      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-        let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
-
-        // Limpieza profunda de comillas múltiples al inicio y final
-        while ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
-          privateKey = privateKey.slice(1, -1).trim();
+      // 1. Cargar mediante el JSON completo en variable de entorno (La forma más segura en Railway)
+      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        let serviceAccountValue = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+        
+        // Limpiar comillas envolventes si las hubiera
+        while ((serviceAccountValue.startsWith('"') && serviceAccountValue.endsWith('"')) || (serviceAccountValue.startsWith("'") && serviceAccountValue.endsWith("'"))) {
+          serviceAccountValue = serviceAccountValue.slice(1, -1).trim();
         }
 
-        // Reemplazar tanto barras con 'n' como saltos reales y normalizar los retornos de carro
-        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
-
-        initializeApp({
-          credential: cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey,
-          }),
-        });
-        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde variables de entorno');
-        return;
-      }
-
-      // 1.b. Intentar cargar desde variable de entorno JSON completa (por compatibilidad)
-      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        const serviceAccount = JSON.parse(serviceAccountValue);
+        
         initializeApp({
           credential: cert(serviceAccount),
         });
-        this.logger.log('Firebase inicializado desde variable de entorno JSON');
+        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde FIREBASE_SERVICE_ACCOUNT');
         return;
       }
 
-      // 2. Intentar cargar desde archivo físico si existe
+      // 2. Intentar cargar desde archivo físico si existe localmente
       const filePath = path.resolve(process.cwd(), 'firebase-service-account.json');
       if (fs.existsSync(filePath)) {
         initializeApp({
           credential: cert(filePath),
         });
-        this.logger.log('Firebase inicializado desde archivo JSON');
+        this.logger.log('Firebase inicializado desde archivo JSON local');
         return;
       }
 
