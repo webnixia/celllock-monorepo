@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getMessaging, Message } from 'firebase-admin/messaging';
+import { getFirestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -10,13 +10,16 @@ export class FirebaseService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      this.logger.log(`DEBUG ENV - PROJECT_ID: ${!!process.env.FIREBASE_PROJECT_ID}`);
-      this.logger.log(`DEBUG ENV - CLIENT_EMAIL: ${!!process.env.FIREBASE_CLIENT_EMAIL}`);
-      this.logger.log(`DEBUG ENV - PRIVATE_KEY: ${!!process.env.FIREBASE_PRIVATE_KEY}`);
-
       // 1. Intentar cargar desde variables de entorno individuales (Railway)
       if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-        let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+
+        // Eliminar comillas envolventes si Railway las incluyó al pegar la variable
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+          privateKey = privateKey.slice(1, -1);
+        }
+
+        // Convertir los \n literales en saltos de línea reales para la clave PEM
         privateKey = privateKey.replace(/\\n/g, '\n');
 
         initializeApp({
@@ -26,7 +29,7 @@ export class FirebaseService implements OnModuleInit {
             privateKey,
           }),
         });
-        this.logger.log('🔥 Firebase inicializado desde variables de entorno');
+        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde variables de entorno');
         return;
       }
 
@@ -57,32 +60,31 @@ export class FirebaseService implements OnModuleInit {
   }
 
   /**
-   * Método para enviar notificaciones de actualización de estado (Bloquear/Desbloquear) al dispositivo
+   * Actualiza el documento del dispositivo en Firestore para que la App Android reaccione en tiempo real
    */
-  async updateDeviceStatus(token: string, status: string, payloadData?: Record<string, string>) {
+  async updateDeviceStatus(deviceId: string, status: string, payloadData?: Record<string, string>) {
     if (getApps().length === 0) {
-      this.logger.warn(`Firebase no está inicializado. Se omitió el envío a ${token}`);
+      this.logger.warn(`Firebase no está inicializado. Se omitió el envío a ${deviceId}`);
       return null;
     }
 
     try {
-      const message: Message = {
-        token,
-        data: {
-          status,
+      const db = getFirestore();
+
+      // Actualiza o crea el documento en la colección 'devices' con el ID (IMEI / Android ID)
+      await db.collection('devices').doc(deviceId).set(
+        {
+          status: status,
+          updatedAt: new Date().toISOString(),
           ...(payloadData || {}),
         },
-        notification: {
-          title: 'ControlCell - Estado de Dispositivo',
-          body: `El estado del dispositivo ha cambiado a: ${status}`,
-        },
-      };
+        { merge: true },
+      );
 
-      const response = await getMessaging().send(message);
-      this.logger.log(`Mensaje enviado con éxito a Firebase: ${response}`);
-      return response;
+      this.logger.log(`Documento Firestore actualizado para ${deviceId} -> Estado: ${status}`);
+      return true;
     } catch (error) {
-      this.logger.error(`Error al enviar mensaje push a Firebase para el token ${token}:`, error);
+      this.logger.error(`Error al actualizar Firestore para el dispositivo ${deviceId}:`, error);
       throw error;
     }
   }
