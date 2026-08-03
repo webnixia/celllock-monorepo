@@ -33,7 +33,7 @@ export default function DevicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // Modal State
+  // Modal Crear Venta State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [model, setModel] = useState('');
   const [imei, setImei] = useState('');
@@ -48,6 +48,9 @@ export default function DevicesPage() {
   const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Modal QR / Enrolamiento State
+  const [qrDevice, setQrDevice] = useState<Device | null>(null);
 
   const calculateDefaultDueDate = (frequency: string) => {
     const now = new Date();
@@ -174,7 +177,6 @@ export default function DevicesPage() {
     }
   };
 
-  // 💵 MÓDULO DE COBRANZAS: REGISTRAR PAGO Y DESBLOQUEAR AUTOMÁTICAMENTE
   const handleRegisterPayment = async (dev: Device) => {
     const total = dev.totalInstallments || 12;
     const currentPaid = dev.paidInstallments || 0;
@@ -203,7 +205,7 @@ export default function DevicesPage() {
           tenantId: DEMO_TENANT_ID,
           paidInstallments: nextPaid,
           dueDate: nextDueDate,
-          status: 'ACTIVE', // Desbloqueo automático al pagar
+          status: 'ACTIVE',
         }),
       });
 
@@ -275,7 +277,7 @@ export default function DevicesPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#111827] border border-gray-800 p-6 rounded-2xl shadow-xl">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Flota y Dispositivos MDM</h1>
-            <p className="text-xs text-gray-400 mt-1">Gestión integral de equipos, cobros de cuotas y bloqueo remoto</p>
+            <p className="text-xs text-gray-400 mt-1">Gestión integral de equipos, cobros de cuotas y enrolamiento</p>
           </div>
           <button
             onClick={() => {
@@ -357,9 +359,15 @@ export default function DevicesPage() {
                           👤 {dev.buyerName} {dev.buyerDni ? `(DNI: ${dev.buyerDni})` : ''}
                         </span>
                       )}
-                      <span className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-300">
-                        🔑 QR: <strong className="text-white">{dev.enrollmentCode}</strong>
-                      </span>
+                      
+                      {/* BOTÓN / ETIQUETA QR PARA ABRIR EL MODAL DE ENROLAMIENTO */}
+                      <button
+                        onClick={() => setQrDevice(dev)}
+                        className="bg-gray-800 hover:bg-gray-700 text-indigo-400 hover:text-indigo-300 px-3 py-1 rounded-lg font-mono transition-all cursor-pointer flex items-center gap-1.5 border border-indigo-500/30"
+                      >
+                        <span>🔲</span> QR: <strong className="text-white underline">{dev.enrollmentCode || 'Ver Código'}</strong>
+                      </button>
+
                       <span className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-300">
                         💻 IMEI: {dev.imei || 'Pendiente'}
                       </span>
@@ -392,7 +400,7 @@ export default function DevicesPage() {
                     )}
                   </div>
 
-                  {/* ACCIONES Y BOTÓN DE COBRANZA */}
+                  {/* ACCIONES */}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => handleRegisterPayment(dev)}
@@ -424,6 +432,48 @@ export default function DevicesPage() {
           </div>
         )}
       </main>
+
+      {/* MODAL CÓDIGO QR / ENROLAMIENTO */}
+      {qrDevice && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 text-center">
+            <div className="flex justify-between items-center">
+              <h3 className="text-base font-bold text-white text-left">Guía de Enrolamiento MDM</h3>
+              <button onClick={() => setQrDevice(null)} className="text-gray-400 hover:text-white text-xl cursor-pointer">✕</button>
+            </div>
+
+            <div className="bg-indigo-600/10 border border-indigo-500/30 p-4 rounded-xl space-y-1">
+              <p className="text-xs text-indigo-400 font-semibold uppercase">Equipo Asignado</p>
+              <p className="text-lg font-bold text-white">{qrDevice.model}</p>
+              {qrDevice.buyerName && <p className="text-xs text-gray-300">Cliente: {qrDevice.buyerName}</p>}
+            </div>
+
+            {/* CAJA DEL CÓDIGO QR / CÓDIGO DE ENROLAMIENTO */}
+            <div className="bg-white p-6 rounded-2xl space-y-3 shadow-inner inline-block w-full">
+              <div className="w-40 h-40 mx-auto bg-gray-900 rounded-xl flex items-center justify-center p-4 border-4 border-dashed border-indigo-500">
+                <span className="text-white font-mono text-xl font-black tracking-widest">{qrDevice.enrollmentCode || 'CC-SYNC'}</span>
+              </div>
+              <p className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider">Código Único de Vinculación</p>
+            </div>
+
+            <div className="text-left bg-[#1f2937]/50 p-4 rounded-xl space-y-2 text-xs text-gray-300 border border-gray-800">
+              <p className="font-bold text-indigo-400 uppercase">Pasos para el técnico en el local:</p>
+              <ol className="list-decimal list-inside space-y-1 text-gray-400">
+                <li>Instale la app de ControlCell en el celular del cliente.</li>
+                <li>Ingrese el código <strong className="text-white font-mono">{qrDevice.enrollmentCode}</strong> en la app.</li>
+                <li>El sistema enlazará el IMEI automáticamente y dejará el equipo activo.</li>
+              </ol>
+            </div>
+
+            <button
+              onClick={() => setQrDevice(null)}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl uppercase tracking-wider cursor-pointer shadow-lg shadow-indigo-600/30"
+            >
+              Cerrar Ventana
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL NUEVA VENTA */}
       {isModalOpen && (
