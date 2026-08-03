@@ -18,11 +18,13 @@ export class FirebaseService implements OnModuleInit {
       if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
         let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
 
-        // Limpieza robusta de comillas envolventes
-        privateKey = privateKey.replace(/^["']|["']$/g, '');
+        // Limpieza profunda de comillas múltiples al inicio y final
+        while ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+          privateKey = privateKey.slice(1, -1).trim();
+        }
 
-        // Reemplazar barras invertidas con 'n' y limpiar retornos de carro por completo
-        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\r/g, '');
+        // Reemplazar tanto barras con 'n' como saltos reales y normalizar los retornos de carro
+        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
 
         initializeApp({
           credential: cert({
