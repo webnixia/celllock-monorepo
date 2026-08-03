@@ -25,8 +25,6 @@ export class FirebaseService implements OnModuleInit {
             });
             this.logger.log('🔥 Firebase Firestore inicializado con éxito desde FIREBASE_SERVICE_ACCOUNT');
             return;
-          } else {
-            this.logger.warn('FIREBASE_SERVICE_ACCOUNT no contiene el campo "project_id". Probando alternativas...');
           }
         } catch (jsonErr) {
           this.logger.error('Error al parsear el JSON de FIREBASE_SERVICE_ACCOUNT:', jsonErr);
@@ -34,9 +32,11 @@ export class FirebaseService implements OnModuleInit {
       }
 
       // 2. Intentar cargar desde variables de entorno individuales (Railway)
-      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-        let privateKey = process.env.FIREBASE_PRIVATE_KEY.trim();
+      const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+      let privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim();
 
+      if (projectId && clientEmail && privateKey) {
         while ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
           privateKey = privateKey.slice(1, -1).trim();
         }
@@ -45,12 +45,13 @@ export class FirebaseService implements OnModuleInit {
 
         initializeApp({
           credential: cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            projectId,
+            clientEmail,
             privateKey,
           }),
         });
-        this.logger.log('🔥 Firebase Firestore inicializado con éxito desde variables individuales');
+
+        this.logger.log('🔥 Firebase Firestore inicializado correctamente con variables de entorno individuales');
         return;
       }
 
@@ -66,7 +67,7 @@ export class FirebaseService implements OnModuleInit {
 
       this.logger.warn('No se encontraron credenciales válidas de Firebase. Inicialización omitida.');
     } catch (error) {
-      this.logger.error('Error al intentar inicializar Firebase:', error);
+      this.logger.error('Error crítico al inicializar Firebase:', error);
     }
   }
 
@@ -82,7 +83,6 @@ export class FirebaseService implements OnModuleInit {
     try {
       const db = getFirestore();
 
-      // Actualiza o crea el documento en la colección 'devices' con el ID (IMEI / Android ID)
       await db.collection('devices').doc(deviceId).set(
         {
           status: status,
