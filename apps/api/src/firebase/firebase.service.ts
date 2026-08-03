@@ -20,16 +20,19 @@ export class FirebaseService implements OnModuleInit {
           privateKey = privateKey.slice(1, -1).trim();
         }
 
-        // 1. Reemplazar escapes lógicos de saltos de línea
-        privateKey = privateKey.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
-
-        // 2. RECONSTRUCTOR AUTOMÁTICO: Si Railway aplanó la llave en una sola línea, la reconstruimos por bloques PEM
-        if (privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('\n')) {
+        // RECONSTRUCTOR INFALIBLE PEM: Limpia cualquier deformación de Railway y reconstruye los saltos de línea estrictos
+        if (privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
           const header = '-----BEGIN PRIVATE KEY-----';
           const footer = '-----END PRIVATE KEY-----';
-          let body = privateKey.replace(header, '').replace(footer, '').replace(/\s+/g, '');
+          
+          let body = privateKey
+            .replace(header, '')
+            .replace(footer, '')
+            .replace(/\\n/g, '')
+            .replace(/[\r\n\s]+/g, '');
+
           const chunks = body.match(/.{1,64}/g) || [];
-          privateKey = `${header}\n${chunks.join('\n')}\n${footer}`;
+          privateKey = `${header}\n${chunks.join('\n')}\n${footer}\n`;
         }
 
         initializeApp({
